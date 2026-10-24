@@ -38,6 +38,8 @@ export type TowerTag = 'projectile' | 'magic' | 'bow' | 'cannon' | 'mage' | 'fro
 export type StatKey =
   // Türme
   | 'damage'
+  | 'physDamage'
+  | 'magicDamage'
   | 'attackSpeed'
   | 'range'
   | 'projectiles'
@@ -46,6 +48,9 @@ export type StatKey =
   | 'chainTargets'
   | 'armorPen'
   | 'critChance'
+  | 'critDamage'
+  | 'maxMana'
+  | 'manaRegen'
   | 'airDamage'
   | 'projectileSpeed'
   | 'towerCost'

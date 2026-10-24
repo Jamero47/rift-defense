@@ -63,6 +63,11 @@ export function scaleModifiers(mods: readonly Modifier[], factor: number): Modif
 
 const STAT_LABELS: Record<StatKey, { label: string; flat: 'number' | 'percent' }> = {
   damage: { label: 'Schaden', flat: 'number' },
+  physDamage: { label: 'normaler Schaden', flat: 'number' },
+  magicDamage: { label: 'magischer Schaden', flat: 'number' },
+  critDamage: { label: 'kritischer Schaden', flat: 'percent' },
+  maxMana: { label: 'Mana', flat: 'number' },
+  manaRegen: { label: 'Mana-Regeneration', flat: 'number' },
   attackSpeed: { label: 'Angriffstempo', flat: 'number' },
   range: { label: 'Reichweite', flat: 'number' },
   projectiles: { label: 'Projektil(e)', flat: 'number' },
@@ -70,7 +75,7 @@ const STAT_LABELS: Record<StatKey, { label: string; flat: 'number' | 'percent' }
   slowStrength: { label: 'Verlangsamung', flat: 'percent' },
   chainTargets: { label: 'Kettenziel(e)', flat: 'number' },
   armorPen: { label: 'Rüstungsdurchschlag', flat: 'percent' },
-  critChance: { label: 'Chance auf doppelten Schaden', flat: 'percent' },
+  critChance: { label: 'Kritische Trefferchance', flat: 'percent' },
   airDamage: { label: 'Schaden gegen Fluggegner', flat: 'number' },
   projectileSpeed: { label: 'Projektiltempo', flat: 'number' },
   towerCost: { label: 'Turmkosten', flat: 'number' },

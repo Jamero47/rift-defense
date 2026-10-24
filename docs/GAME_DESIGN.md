@@ -120,6 +120,24 @@ Belohnung: Die **Magierakademie** wird freigeschaltet.
 | Frostturm | 90 | Boden | verlangsamt, ignoriert Rüstung | Magierakademie |
 | König | – | Boden + Luft | am Tor, im Kampf verbesserbar, **Pfeilhagel**, baut Rohstoffe ab | – |
 
+### Turm-Werte (Fenster beim Antippen eines Turms)
+
+„Turm-Name Lvl. X“, darunter: Normaler Schaden · Magischer Schaden · Attack Speed · Range · Crit Chance ·
+Crit DMG · Mana · Mana Regeneration · Beschreibung der Fähigkeit.
+
+- Normaler Schaden wird durch Rüstung verringert, magischer nicht. Ein Turm kann beides haben.
+- Kritischer Treffer: Mit „Crit Chance“ wird der Schaden mit „Crit DMG“ multipliziert (150 % = 1,5-fach).
+- Mana füllt sich mit „Mana Regeneration“ pro Sekunde. Bei vollem Mana löst der Turm seine Fähigkeit aus.
+  **Stand:** Die Fähigkeiten sind nur beschrieben, ihre Wirkung ist noch ein Platzhalter.
+
+| Turm | Fähigkeit (Entwurf) |
+|---|---|
+| Bogenturm | Pfeilsalve: 5 Pfeile auf verschiedene Gegner |
+| Kanonenturm | Großkaliber: doppelter Schaden und Explosionsradius |
+| Magierturm | Gewittersturm: Blitz auf bis zu 8 Gegner ohne Abschwächung |
+| Frostturm | Eiszeit: friert Bodengegner in Reichweite 2 s ein |
+| Ballista | Durchbohren: Bolzen trifft alle Fluggegner in einer Linie |
+
 ## Rifts
 
 | Rift | Sondereffekt | Sonderfelder | Rohstoff-Felder | Spezial / Boss |

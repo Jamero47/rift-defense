@@ -129,7 +129,7 @@ export const CARDS: readonly CardDef[] = [
   },
   {
     id: 'glueckstreffer', name: 'Glückstreffer', rarity: 'epic',
-    description: '12 % Chance auf doppelten Schaden',
+    description: '+12 % kritische Trefferchance',
     modifiers: [{ stat: 'critChance', kind: 'flat', value: 0.12 }],
     maxStacks: 3,
   },

@@ -16,12 +16,15 @@ const TARGET_ORDER = ['first', 'strong', 'close'] as const;
 
 export class BattleMenus {
   private root: Phaser.GameObjects.Container | null = null;
+  /** Mana-Anzeige des offenen Turmfensters */
+  private manaView: { tower: Tower; text: Phaser.GameObjects.Text; gfx: Phaser.GameObjects.Graphics; x: number; y: number; w: number } | null = null;
 
   constructor(private readonly scene: BattleScene) {}
 
   close(): void {
     this.root?.destroy();
     this.root = null;
+    this.manaView = null;
     this.scene.rangeGfx.clear();
   }
 
@@ -114,51 +117,93 @@ export class BattleMenus {
 
   openTower(t: Tower): void {
     const s = this.scene;
-    const w = 340;
-    const h = 300;
+    const w = 400;
+    const pad = 16;
+    const next = t.level < t.def.levels.length ? s.computeTowerStats(t.def, t.level + 1, t.tile) : null;
+    const allowed = s.towerMaxLevel(t.def);
+    const notes: { text: string; color: string }[] = [];
+    if (t.tile.effectText) notes.push({ text: t.tile.effectText, color: t.tile.towerModifiers?.every((m) => m.value >= 0) ? COLORS.good : COLORS.bad });
+    if (t.disabled > 0) notes.push({ text: 'Gehackt! Turm ist kurz außer Betrieb.', color: '#4ade80' });
+    const rows = statRows(t.stats, next);
+    const extras = extraLines(t.def, t.stats, next);
+    const abilityText = addText(s, pad, 0, t.def.ability.description, 15, { bold: false, wrap: w - pad * 2 });
+    const rowH = 23;
+    const h = 52 + notes.length * 22 + rows.length * rowH + 14 + 26 + abilityText.height + 10 + (extras ? 24 : 0) + 120;
     const x = t.x + TILE / 2 + 8 + w < GAME_WIDTH ? t.x + TILE / 2 + 8 : t.x - TILE / 2 - 8 - w;
     const y = clamp(t.y - h / 2, MAP_Y + 4, GAME_HEIGHT - h - 4);
     const root = this.open(x, y, w, h);
     this.drawRange(t.x, t.y, t.stats.range, t.def.color);
 
-    const maxLevel = t.def.levels.length;
-    const allowed = s.towerMaxLevel(t.def);
-    root.add(addText(s, 16, 12, t.def.name, 24));
-    root.add(addText(s, w - 16, 16, `Stufe ${t.level}/${allowed}`, 18, { origin: [1, 0], color: COLORS.gold }));
-    let ly = 46;
-    if (t.tile.effectText) {
-      const good = t.tile.towerModifiers?.every((m) => m.value >= 0);
-      root.add(addText(s, 16, ly, t.tile.effectText, 16, { color: good ? COLORS.good : COLORS.bad }));
+    // Titel: "Turm-Name Lvl. X"
+    root.add(addText(s, pad, 12, `${t.def.name} Lvl. ${t.level}`, 24));
+    root.add(addText(s, w - pad, 18, `max. Lvl. ${allowed}`, 15, { origin: [1, 0], color: COLORS.muted }));
+    let ly = 48;
+    for (const n of notes) {
+      root.add(addText(s, pad, ly, n.text, 15, { color: n.color }));
       ly += 22;
     }
-    if (t.disabled > 0) {
-      root.add(addText(s, 16, ly, 'Gehackt! Turm ist kurz außer Betrieb.', 16, { color: '#4ade80' }));
-      ly += 22;
-    }
-    const next = t.level < maxLevel ? s.computeTowerStats(t.def, t.level + 1, t.tile) : null;
-    const lines = statLines(t.def, t.stats, next);
-    root.add(addText(s, 16, ly, lines.join('\n'), 17, { bold: false, wrap: w - 32 }));
 
-    const by = h - 98;
+    // Werte-Tabelle
+    const g = s.add.graphics();
+    root.add(g);
+    for (const [i, row] of rows.entries()) {
+      if (i % 2 === 0) {
+        g.fillStyle(0xffffff, 0.05);
+        g.fillRect(pad - 6, ly - 2, w - pad * 2 + 12, rowH);
+      }
+      root.add(addText(s, pad, ly, `${row.label}:`, 16, { bold: false, color: COLORS.muted }));
+      const value = addText(s, w - pad, ly, row.value, 16, { origin: [1, 0] });
+      root.add(value);
+      if (row.label === 'Mana') this.manaView = { tower: t, text: value, gfx: g, x: pad + 70, y: ly + 8, w: 150 };
+      ly += rowH;
+    }
+    this.tick();
+
+    // Fähigkeit bei vollem Mana
+    ly += 10;
+    root.add(addText(s, pad, ly, `Fähigkeit: ${t.def.ability.name}`, 17, { color: '#93c5fd' }));
+    ly += 24;
+    abilityText.setY(ly);
+    root.add(abilityText);
+    ly += abilityText.height + 6;
+    if (extras) {
+      root.add(addText(s, pad, ly, extras, 14, { bold: false, color: COLORS.muted, wrap: w - pad * 2 }));
+    }
+
+    // Knöpfe
+    const by = h - 92;
     if (next && t.level < allowed) {
       const cost = s.towerCost(t.def.levels[t.level]);
-      root.add(new Button(s, 92, by, 156, 56, 'Verbessern', () => {
+      root.add(new Button(s, 100, by, 170, 54, 'Verbessern', () => {
         if (s.upgradeTower(t)) this.openTower(t);
       }, { subLabel: `${cost} Kristalle`, fontSize: 19, enabled: s.crystals >= cost }));
     } else if (next) {
-      root.add(new Button(s, 92, by, 156, 56, 'Gesperrt', () => {}, { enabled: false, fontSize: 19, subLabel: `Upgrade: ${s.towerSource(t.def)}` }));
+      root.add(new Button(s, 100, by, 170, 54, 'Gesperrt', () => {}, { enabled: false, fontSize: 19, subLabel: `Upgrade: ${s.towerSource(t.def)}` }));
     } else {
-      root.add(new Button(s, 92, by, 156, 56, 'Max. Stufe', () => {}, { enabled: false, fontSize: 19 }));
+      root.add(new Button(s, 100, by, 170, 54, 'Max. Stufe', () => {}, { enabled: false, fontSize: 19 }));
     }
-    root.add(new Button(s, 254, by, 140, 56, 'Verkaufen', () => {
+    root.add(new Button(s, 290, by, 190, 54, 'Verkaufen', () => {
       s.sellTower(t);
       this.close();
     }, { subLabel: `+${s.sellValue(t)} Kristalle`, color: COLORS.danger, fontSize: 19 }));
-    const modeBtn = new Button(s, w / 2, h - 34, w - 32, 44, `Ziel: ${TARGET_MODE_LABELS[t.targetMode]}`, () => {
+    const modeBtn = new Button(s, w / 2, h - 32, w - 32, 42, `Ziel: ${TARGET_MODE_LABELS[t.targetMode]}`, () => {
       t.targetMode = TARGET_ORDER[(TARGET_ORDER.indexOf(t.targetMode) + 1) % TARGET_ORDER.length];
       modeBtn.setLabel(`Ziel: ${TARGET_MODE_LABELS[t.targetMode]}`);
     }, { color: COLORS.buttonAlt, fontSize: 18 });
     root.add(modeBtn);
+  }
+
+  /** Aktualisiert die Mana-Anzeige im offenen Turmfenster (jedes Bild aufgerufen). */
+  tick(): void {
+    const v = this.manaView;
+    if (!v || !this.root) return;
+    const st = v.tower.stats;
+    v.text.setText(`${Math.floor(v.tower.mana)}/${Math.round(st.maxMana)}`);
+    const p = Math.min(1, v.tower.mana / st.maxMana);
+    v.gfx.fillStyle(0x000000, 0.6);
+    v.gfx.fillRect(v.x, v.y - 4, v.w, 8);
+    v.gfx.fillStyle(0x3b82f6, 1);
+    v.gfx.fillRect(v.x, v.y - 4, v.w * p, 8);
   }
 
   // ---------------------------------------------------------------- König
@@ -227,25 +272,40 @@ export class BattleMenus {
 }
 
 function summary(def: TowerDef, st: TowerStats): string {
-  const parts = [`Schaden ${formatNumber(st.damage)}`, `${formatNumber(st.attackSpeed)}/s`, `Reichweite ${formatNumber(st.range / TILE)}`];
+  const dmg = [st.physDamage > 0 ? `${formatNumber(st.physDamage)} normal` : '', st.magicDamage > 0 ? `${formatNumber(st.magicDamage)} magisch` : '']
+    .filter(Boolean).join(' + ');
+  const parts = [`Schaden ${dmg}`, `${formatNumber(st.attackSpeed)}/s`, `Reichweite ${formatNumber(st.range / TILE)}`];
   parts.push(def.targets.ground && def.targets.air ? 'Boden + Luft' : def.targets.air ? 'nur Luft' : 'nur Boden');
   return parts.join(' · ');
 }
 
-function statLines(def: TowerDef, st: TowerStats, next: TowerStats | null): string[] {
-  const arrow = (a: number, b: number | undefined, digits = 1) =>
-    b === undefined || Math.abs(a - b) < 0.001 ? formatNumber(a, digits) : `${formatNumber(a, digits)} → ${formatNumber(b, digits)}`;
-  const lines = [
-    `Schaden: ${arrow(st.damage, next?.damage)}`,
-    `Tempo: ${arrow(st.attackSpeed, next?.attackSpeed, 2)} pro Sekunde`,
-    `Reichweite: ${arrow(st.range / TILE, next ? next.range / TILE : undefined)} Felder`,
+/** Werte-Tabelle des Turmfensters in fester Reihenfolge; "→" zeigt die nächste Stufe. */
+function statRows(st: TowerStats, next: TowerStats | null): { label: string; value: string }[] {
+  const arrow = (a: number, b: number | undefined, digits = 1, unit = '') => {
+    const fa = `${formatNumber(a, digits)}${unit}`;
+    return b === undefined || Math.abs(a - b) < 0.001 ? fa : `${fa} → ${formatNumber(b, digits)}${unit}`;
+  };
+  return [
+    { label: 'Normaler Schaden', value: arrow(st.physDamage, next?.physDamage) },
+    { label: 'Magischer Schaden', value: arrow(st.magicDamage, next?.magicDamage) },
+    { label: 'Attack Speed', value: arrow(st.attackSpeed, next?.attackSpeed, 2, '/s') },
+    { label: 'Range', value: arrow(st.range / TILE, next ? next.range / TILE : undefined, 1, ' Felder') },
+    { label: 'Crit Chance', value: arrow(st.critChance * 100, next ? next.critChance * 100 : undefined, 0, ' %') },
+    { label: 'Crit DMG', value: arrow(st.critDamage * 100, next ? next.critDamage * 100 : undefined, 0, ' %') },
+    { label: 'Mana', value: '' },
+    { label: 'Mana Regeneration', value: arrow(st.manaRegen, next?.manaRegen, 1, '/s') },
   ];
-  if (st.splash > 0) lines.push(`Explosion: ${arrow(st.splash / TILE, next ? next.splash / TILE : undefined)} Felder`);
-  if (st.slowStrength > 0) lines.push(`Verlangsamt um ${arrow(st.slowStrength * 100, next ? next.slowStrength * 100 : undefined, 0)} %`);
-  if (def.attack === 'chain') lines.push(`Springt auf ${arrow(st.chain, next?.chain, 0)} weitere Ziele`);
-  if (st.projectiles > 1) lines.push(`${st.projectiles} Projektile pro Schuss`);
-  lines.push(def.targets.ground && def.targets.air ? 'Trifft Boden + Luft' : def.targets.air ? 'Trifft nur Fluggegner' : 'Trifft nur Bodengegner');
-  return lines;
+}
+
+/** Besonderheiten des Turms in einer Zeile (Explosion, Verlangsamung, Ziele …). */
+function extraLines(def: TowerDef, st: TowerStats, next: TowerStats | null): string {
+  const parts: string[] = [];
+  if (st.splash > 0) parts.push(`Explosion ${formatNumber(st.splash / TILE)} Felder`);
+  if (st.slowStrength > 0) parts.push(`verlangsamt um ${formatNumber(st.slowStrength * 100, 0)} %`);
+  if (def.attack === 'chain') parts.push(`springt auf ${st.chain}${next && next.chain !== st.chain ? ` → ${next.chain}` : ''} weitere Ziele`);
+  if (st.projectiles > 1) parts.push(`${st.projectiles} Projektile pro Schuss`);
+  parts.push(def.targets.ground && def.targets.air ? 'trifft Boden + Luft' : def.targets.air ? 'trifft nur Fluggegner' : 'trifft nur Bodengegner');
+  return parts.join(' · ');
 }
 
 function clamp(v: number, lo: number, hi: number): number {

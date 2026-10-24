@@ -108,16 +108,21 @@ export const TARGET_MODE_LABELS: Record<TargetMode, string> = {
 
 /** Fertig berechnete Werte eines Turms (inkl. aller Boni). Reichweite/Radius in Pixeln. */
 export interface TowerStats {
-  damage: number;
+  physDamage: number;
+  magicDamage: number;
   attackSpeed: number;
   range: number;
+  critChance: number;
+  /** Faktor bei kritischem Treffer (1.5 = 150 %) */
+  critDamage: number;
+  maxMana: number;
+  manaRegen: number;
   projectiles: number;
   splash: number;
   slowStrength: number;
   slowDuration: number;
   chain: number;
   armorPen: number;
-  crit: number;
   airMul: number;
   projectileSpeed: number;
 }
@@ -132,6 +137,8 @@ export class Tower {
   cooldown = 0;
   /** Sekunden, die der Turm noch gehackt ist */
   disabled = 0;
+  /** Aktuelles Mana; bei vollem Mana wird die Fähigkeit ausgelöst */
+  mana = 0;
   targetMode: TargetMode = 'first';
   stats!: TowerStats;
 
@@ -173,10 +180,13 @@ export class Tower {
 
 /** Was ein Treffer anrichtet. */
 export interface HitInfo {
-  damage: number;
-  type: 'physical' | 'magic';
+  /** Normaler Schaden (Rüstung schwächt ihn ab) */
+  physDamage: number;
+  /** Magischer Schaden (ignoriert Rüstung) */
+  magicDamage: number;
   armorPen: number;
-  crit: number;
+  critChance: number;
+  critDamage: number;
   airMul: number;
   splash: number;
   slowStrength: number;

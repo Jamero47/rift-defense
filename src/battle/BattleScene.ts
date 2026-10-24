@@ -239,6 +239,7 @@ export class BattleScene extends Phaser.Scene {
     }
     this.drawOverlay(dt);
     this.hud.refresh();
+    this.menus.tick();
   }
 
   // ================================================================ Aufbau
@@ -433,17 +434,23 @@ export class BattleScene extends Phaser.Scene {
     const lvl = def.levels[level - 1];
     const tags = def.tags;
     const m = this.mods.clone().add(...(tile.towerModifiers ?? []));
+    // 'damage' wirkt auf beide Schadensarten, 'physDamage'/'magicDamage' nur auf eine
+    const dmgMul = Math.max(0, 1 + m.pct('damage', tags));
     return {
-      damage: m.apply('damage', lvl.damage, tags),
+      physDamage: lvl.physDamage > 0 ? m.apply('physDamage', lvl.physDamage, tags) * dmgMul : 0,
+      magicDamage: lvl.magicDamage > 0 ? m.apply('magicDamage', lvl.magicDamage, tags) * dmgMul : 0,
       attackSpeed: Math.max(0.05, m.apply('attackSpeed', lvl.attackSpeed, tags)),
       range: m.apply('range', lvl.range, tags) * TILE,
+      critChance: Math.min(1, m.apply('critChance', lvl.critChance, tags)),
+      critDamage: m.apply('critDamage', lvl.critDamage, tags),
+      maxMana: Math.max(1, m.apply('maxMana', lvl.mana, tags)),
+      manaRegen: m.apply('manaRegen', lvl.manaRegen, tags),
       projectiles: def.attack === 'projectile' ? Math.max(1, Math.round(m.apply('projectiles', 1, tags))) : 1,
       splash: lvl.splashRadius ? m.apply('splashRadius', lvl.splashRadius, tags) * TILE : 0,
       slowStrength: lvl.slow ? Math.min(0.85, m.apply('slowStrength', lvl.slow.strength, tags)) : 0,
       slowDuration: lvl.slow?.duration ?? 0,
       chain: lvl.chainTargets !== undefined ? Math.round(m.apply('chainTargets', lvl.chainTargets, tags)) : 0,
       armorPen: Math.min(1, m.flat('armorPen', tags)),
-      crit: m.flat('critChance', tags),
       airMul: 1 + m.pct('airDamage', tags),
       projectileSpeed: m.apply('projectileSpeed', def.projectile.speed, tags) * TILE,
     };
@@ -793,6 +800,9 @@ export class BattleScene extends Phaser.Scene {
         if (t.disabled <= 0) t.setHacked(false);
         continue;
       }
+      // Mana füllt sich; bei vollem Mana Fähigkeit auslösen
+      t.mana = Math.min(t.stats.maxMana, t.mana + t.stats.manaRegen * dt);
+      if (t.mana >= t.stats.maxMana && this.phase === 'wave') this.castTowerAbility(t);
       t.cooldown -= dt;
       if (t.cooldown > 0) continue;
       const targets = this.findTargets(t.x, t.y, t.stats.range, t.def.targets, t.targetMode);
@@ -803,13 +813,23 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Fähigkeit bei vollem Mana. PLATZHALTER: Die Wirkungen (siehe TowerDef.ability) folgen in einem späteren Schritt –
+   * aktuell wird nur der Name angezeigt und das Mana geleert.
+   */
+  private castTowerAbility(t: Tower): void {
+    t.mana = 0;
+    floatText(this, t.x, t.y - 34, t.def.ability.name, '#93c5fd', 15);
+  }
+
   private hitInfo(t: Tower): HitInfo {
     const s = t.stats;
     return {
-      damage: s.damage,
-      type: t.def.damageType,
+      physDamage: s.physDamage,
+      magicDamage: s.magicDamage,
       armorPen: s.armorPen,
-      crit: s.crit,
+      critChance: s.critChance,
+      critDamage: s.critDamage,
       airMul: s.airMul,
       splash: s.splash,
       slowStrength: s.slowStrength,
@@ -843,11 +863,11 @@ export class BattleScene extends Phaser.Scene {
       current = next;
     }
     const pts: Vec[] = [{ x: t.x, y: t.y - 6 }];
-    let dmg = info.damage;
+    let falloff = 1;
     for (const e of hit) {
       pts.push({ x: e.x, y: e.y });
-      this.damageEnemy(e, { ...info, damage: dmg });
-      dmg *= 0.75;
+      this.damageEnemy(e, { ...info, physDamage: info.physDamage * falloff, magicDamage: info.magicDamage * falloff });
+      falloff *= 0.75;
     }
     for (let i = 1; i < pts.length; i++) {
       this.beams.push({ points: zigzag(pts[i - 1], pts[i], this.rng), color: 0xd8b4fe, t: 0.14, width: 3 });
@@ -862,7 +882,8 @@ export class BattleScene extends Phaser.Scene {
     const targets = this.findTargets(this.kingPos.x, this.kingPos.y, k.range, { ground: true, air: true }, 'first');
     if (targets.length === 0) return;
     const info: HitInfo = {
-      damage: k.damage, type: 'physical', armorPen: this.mods.flat('armorPen'), crit: this.mods.flat('critChance'),
+      physDamage: k.damage, magicDamage: 0, armorPen: this.mods.flat('armorPen'),
+      critChance: Math.min(1, this.mods.apply('critChance', 0.05)), critDamage: this.mods.apply('critDamage', 1.5),
       airMul: 1, splash: 0, slowStrength: 0, slowDuration: 0,
     };
     this.projectiles.push(new Projectile(this, this.kingPos.x + 12, this.kingPos.y, targets[0], 10 * TILE, info, 'royal', DEPTH.proj));
@@ -1022,13 +1043,13 @@ export class BattleScene extends Phaser.Scene {
 
   damageEnemy(e: Enemy, info: HitInfo): void {
     if (!e.alive) return;
-    let dmg = info.damage;
+    // Normaler Schaden wird von Rüstung abgeschwächt, magischer nicht
+    let dmg = info.physDamage * (1 - e.armor * (1 - info.armorPen)) + info.magicDamage;
     if (e.flying) dmg *= info.airMul;
-    if (info.crit > 0 && this.rng.chance(info.crit)) {
-      dmg *= 2;
+    if (info.critChance > 0 && this.rng.chance(info.critChance)) {
+      dmg *= info.critDamage;
       floatText(this, e.x, e.y - 20, 'Krit!', '#fde047', 14);
     }
-    if (info.type === 'physical') dmg *= 1 - e.armor * (1 - info.armorPen);
     if (e.shield > 0) {
       const absorbed = Math.min(e.shield, dmg);
       e.shield -= absorbed;
@@ -1096,7 +1117,9 @@ export class BattleScene extends Phaser.Scene {
       if (s.t > 0) continue;
       for (const e of this.enemies) {
         if (e.alive && Math.hypot(e.x - s.x, e.y - s.y) <= s.radius) {
-          this.damageEnemy(e, { damage: s.damage, type: 'physical', armorPen: 0.5, crit: 0, airMul: 1, splash: 0, slowStrength: 0, slowDuration: 0 });
+          this.damageEnemy(e, {
+            physDamage: s.damage, magicDamage: 0, armorPen: 0.5, critChance: 0, critDamage: 1, airMul: 1, splash: 0, slowStrength: 0, slowDuration: 0,
+          });
         }
       }
     }

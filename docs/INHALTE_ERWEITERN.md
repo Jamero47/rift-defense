@@ -8,8 +8,10 @@ Danach `npm test` (prüft Karten/Wellen für alle Rifts) und `npm run smoke` (Sc
 
 ## Neuer Turm → `src/data/towers.ts`
 
-1. Eintrag in `TOWERS` mit `id`, Name, `tags`, `targets` (Boden/Luft), `damageType`, `attack`, `projectile`, `color`,
-   `baseLimit` (wie viele pro Nacht), `baseMaxLevel` (bis zu welcher Stufe im Kampf) und 3 `levels` (Kosten in Rift-Kristallen).
+1. Eintrag in `TOWERS` mit `id`, Name, `tags`, `targets` (Boden/Luft), `attack`, `ability` (Name + Beschreibung),
+   `projectile`, `color`, `baseLimit` (wie viele pro Nacht), `baseMaxLevel` (bis zu welcher Stufe im Kampf)
+   und 3 `levels`. Jede Stufe hat: `cost` (Rift-Kristalle), `physDamage` (normaler Schaden), `magicDamage`,
+   `attackSpeed`, `range`, `critChance`, `critDamage`, `mana`, `manaRegen`.
 2. Aussehen: in `src/game/textures.ts` → `drawTowerTop()` einen `case '<id>'` ergänzen.
 3. **Freischalten:** Ein Gebäude muss den Turm in `unlocksTowers` haben (`src/data/buildings.ts`) – sonst taucht er nie auf.
 4. Limit und Stufe erhöhen: Gebäude-Upgrades mit `towerLimit` bzw. `towerMaxLevel` und passendem `towerTags`.
