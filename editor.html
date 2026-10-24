@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <title>Rift Defense – Toolbox</title>
+    <style>
+      :root {
+        --bg: #12101c; --panel: #1c1828; --panel2: #262036; --line: #3a3150; --text: #f3e6c4; --muted: #a8a29e;
+        --gold: #facc15; --accent: #8b5cf6; --changed: #fde68a; --danger: #b91c1c;
+        font-family: "Trebuchet MS", "Segoe UI", Roboto, Arial, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+      header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; background: #0b0d1a; border-bottom: 2px solid var(--line); }
+      header h1 { font-size: 20px; margin: 0 12px 0 0; color: var(--gold); }
+      header .spacer { flex: 1; }
+      #status { width: 100%; font-size: 13px; color: var(--muted); }
+      button, a.button {
+        font: inherit; font-size: 14px; font-weight: bold; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+        border-radius: 8px; padding: 8px 14px; cursor: pointer; text-decoration: none;
+      }
+      button:hover, a.button:hover { border-color: var(--gold); }
+      button.primary, a.primary { background: #2f5d3a; }
+      button.danger { background: #5b1414; }
+      button.small { font-size: 12px; padding: 5px 10px; font-weight: normal; }
+      .layout { flex: 1; display: flex; min-height: 0; }
+      nav { width: 210px; flex-shrink: 0; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--line); padding: 10px 8px; }
+      .nav-group { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 14px 8px 6px; }
+      .nav-item { display: block; width: 100%; text-align: left; margin-bottom: 4px; background: transparent; border-color: transparent; }
+      .nav-item.active { background: var(--panel2); border-color: var(--accent); }
+      .nav-item.changed::after, .item.changed::after { content: " ●"; color: var(--changed); }
+      main { flex: 1; overflow-y: auto; padding: 18px 24px 60px; }
+      main h1 { margin: 0 0 6px; }
+      main h2 { font-size: 18px; color: var(--gold); margin: 22px 0 10px; }
+      .intro { color: var(--muted); margin-top: 0; }
+      .items { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+      .item.active { background: var(--accent); }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+      .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+      .card-head h2 { margin: 0; }
+      .help p { line-height: 1.5; max-width: 780px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 16px; margin: 12px 0; }
+      .field { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; }
+      .field.changed, td.changed { background: rgba(253, 230, 138, 0.12); border-color: var(--changed); }
+      .field.wide { margin: 8px 0; }
+      .label { font-size: 13px; color: var(--muted); }
+      .hint { font-size: 11px; color: #8a8478; }
+      .readonly { color: #c4b5fd; font-size: 14px; }
+      input[type=number], input[type=text], textarea {
+        font: inherit; font-size: 15px; color: var(--text); background: #0f0d18; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%;
+      }
+      input[type=color] { width: 60px; height: 32px; border: none; background: none; }
+      input:focus, textarea:focus { outline: 2px solid var(--accent); }
+      fieldset { border: 1px solid var(--line); border-radius: 10px; margin: 12px 0; padding: 8px 12px 12px; }
+      legend { color: var(--gold); font-weight: bold; padding: 0 6px; }
+      .inline, .resources { display: flex; flex-wrap: wrap; gap: 8px; }
+      .field.mini { width: 90px; }
+      .field.res { width: 120px; }
+      .blocks { display: flex; flex-direction: column; gap: 10px; }
+      .block { background: var(--panel2); border-radius: 10px; padding: 10px 12px; }
+      .block-title { font-weight: bold; color: var(--text); }
+      .table-wrap { overflow-x: auto; }
+      table { border-collapse: collapse; }
+      th, td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--line); }
+      th { font-size: 13px; color: var(--muted); font-weight: normal; }
+      th.row-label { white-space: nowrap; color: var(--text); }
+      td input[type=number] { width: 90px; }
+      .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+      .gcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+      .gcard.changed { border-color: var(--changed); }
+      .gpreview { height: 110px; display: flex; align-items: center; justify-content: center; border-radius: 8px;
+        background: repeating-conic-gradient(#2a2538 0% 25%, #1f1b2b 0% 50%) 50% / 16px 16px; }
+      .gpreview img { max-width: 100%; max-height: 100%; image-rendering: auto; }
+      .gname { font-weight: bold; }
+      .gsize { font-size: 11px; color: var(--muted); word-break: break-all; }
+      .gbuttons { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+      @media (max-width: 760px) {
+        .layout { flex-direction: column; }
+        nav { width: 100%; max-height: 150px; display: flex; flex-wrap: wrap; gap: 4px; }
+        .nav-group { width: 100%; margin: 4px; }
+        .nav-item { width: auto; }
+        main { padding: 12px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Rift Defense · Toolbox</h1>
+      <a class="button primary" href="./" target="_blank" rel="noopener">Spiel öffnen</a>
+      <span class="spacer"></span>
+      <button id="btn-import">Importieren</button>
+      <button id="btn-export">Exportieren</button>
+      <button id="btn-reset" class="danger">Alles zurücksetzen</button>
+      <input id="import-file" type="file" accept="application/json,.json" style="display:none" />
+      <div id="status"></div>
+    </header>
+    <div class="layout">
+      <nav id="nav"></nav>
+      <main id="main"></main>
+    </div>
+    <script type="module" src="./src/editor/main.ts"></script>
+  </body>
+</html>

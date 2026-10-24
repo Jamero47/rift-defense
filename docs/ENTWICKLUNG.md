@@ -18,6 +18,15 @@ Ist das Handy im selben WLAN, kann man das Spiel damit direkt auf dem Handy öff
 
 Mit `?debug` hinter der Adresse gibt es in der Browser-Konsole Hilfen, z. B. `rift.go('Battle', { night: 5 })`.
 
+## Toolbox (Werte und Grafiken ohne Programmieren ändern)
+
+`editor.html` (lokal: `http://localhost:5173/editor.html`, online: `…/rift-defense/editor.html`, im Spielmenü: „Toolbox“).
+
+- Änderungen gelten sofort in diesem Browser (localStorage, Grafiken in IndexedDB) – beim nächsten Spielstart.
+- „Exportieren“ → `mod.json`. Liegt diese Datei in `public/mods/`, gilt sie für alle Spieler:innen.
+- Technik: `src/core/mod.ts` (Laden/Anwenden, nur Unterschiede werden gespeichert), `src/editor/` (Oberfläche),
+  `BootScene.applyCustomImages` (eigene Bilder werden auf die Größe der Platzhalter gebracht).
+
 ## Online-Version (GitHub Pages)
 
 Der Workflow `.github/workflows/deploy.yml` baut das Spiel bei jedem Push auf `main` und veröffentlicht es.

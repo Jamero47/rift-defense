@@ -18,7 +18,14 @@
 - [x] Story-Nacht 10 „Der entführte Hofmagier“ schaltet die Magierakademie frei
 - [x] Tutorial: Thronsaal → Bogenmacher → erste Nacht
 
+## Erledigt (v0.3)
+
+- [x] Turm-Werte: normaler/magischer Schaden, Crit Chance/DMG, Mana, Mana-Regeneration, Turmfenster
+- [x] Toolbox (`editor.html`): Werte aller Bereiche und Grafiken ändern, Export als `mod.json`
+
 ## Als Nächstes (Vorschläge)
+
+0. **Turm-Fähigkeiten** wirken lassen (bisher nur Name bei vollem Mana)
 
 1. **Selbst spielen und Balancing anpassen** – Zahlen in `src/config.ts` und `src/data/*`.
    Wichtig nach v0.2: Die Schwierigkeit späterer Nächte an Turm-Limits und Stadt-Fortschritt anpassen

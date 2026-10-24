@@ -8,6 +8,8 @@ export default defineConfig({
     target: 'es2022',
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
+      // Zwei Seiten: das Spiel und die Toolbox
+      input: { main: 'index.html', editor: 'editor.html' },
       output: { manualChunks: { phaser: ['phaser'] } },
     },
   },

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config';
 import { riftForNight } from '../core/progression';
+import { activeMod } from '../core/mod';
 import { saveStore } from '../core/save';
 import { Button, COLORS, addText, showDialog } from '../ui/widgets';
 import { drawBackdrop } from './backdrop';
@@ -30,7 +31,13 @@ export class MenuScene extends Phaser.Scene {
     new Button(this, GAME_WIDTH / 2, 360, 340, 76, 'Spielen', () => this.scene.start('City'), { fontSize: 32 });
     new Button(this, GAME_WIDTH / 2 - 90, 455, 160, 56, 'Vollbild', () => this.toggleFullscreen(), { color: COLORS.buttonAlt, fontSize: 20 });
     new Button(this, GAME_WIDTH / 2 + 90, 455, 160, 56, 'Neues Spiel', () => this.confirmReset(), { color: COLORS.danger, fontSize: 20 });
-    addText(this, GAME_WIDTH - 12, 712, 'v0.1 · Prototyp', 14, { origin: [1, 1], color: COLORS.muted });
+    new Button(this, GAME_WIDTH - 80, 668, 136, 44, 'Toolbox', () => window.open('./editor.html', '_blank'), {
+      color: COLORS.buttonAlt, fontSize: 17,
+    });
+    addText(this, GAME_WIDTH - 12, 712, 'v0.2 · Prototyp', 14, { origin: [1, 1], color: COLORS.muted });
+    if (activeMod.localActive) {
+      addText(this, 12, 712, 'Toolbox-Änderungen aktiv (nur in diesem Browser)', 15, { origin: [0, 1], color: COLORS.gold, stroke: true });
+    }
   }
 
   private toggleFullscreen(): void {

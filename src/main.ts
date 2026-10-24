@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BattleScene } from './battle/BattleScene';
 import { GAME_HEIGHT, GAME_WIDTH } from './config';
+import { loadMods } from './core/mod';
 import { installDebug } from './debug';
 import { BootScene } from './scenes/BootScene';
 import { CityScene } from './scenes/CityScene';
@@ -9,6 +10,10 @@ import { ResultScene } from './scenes/ResultScene';
 
 // Einstiegspunkt: startet Phaser mit allen Szenen.
 // Ablauf: Boot → Menü → Stadt → Kampf (Nacht) → Ergebnis → Stadt → …
+// Die Toolbox (editor.html) ist eine eigene Seite daneben.
+
+// Erst Änderungen aus der Toolbox laden, dann das Spiel starten
+await loadMods();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,

@@ -51,6 +51,12 @@ in `screenshots/` ansehen. `smoke` bricht bei JavaScript-Fehlern im Browser ab.
 - Debug: `?debug` in der URL → `window.rift` (`go(scene, data)`, `battle()`, `save`, `button(label)` = Knopf-Position).
   Wird von `scripts/smoke.mjs` genutzt (`--full-city` für Tests späterer Nächte mit allen Türmen).
 
+- **Toolbox** (`editor.html`, `src/editor/`, `src/core/mod.ts`): ändert Werte in `SECTION_DATA` (Türme, Gegner, König, Karten,
+  Rifts, BALANCE, Gebäude, Bauplätze, Forschung, Story, CITY) und Grafiken. Gespeichert werden nur Unterschiede;
+  Reihenfolge beim Start: Code → `public/mods/mod.json` → Browser-Änderungen. Neue Datenfelder erscheinen dort automatisch;
+  deutsche Beschriftung in `src/editor/labels.ts` ergänzen. Daten müssen reine Werte bleiben (keine Funktionen),
+  damit die Toolbox sie kopieren kann.
+
 ## Konventionen
 
 - Spieltexte und Code-Kommentare **Deutsch**, Bezeichner Englisch.
