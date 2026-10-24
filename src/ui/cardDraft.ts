@@ -21,13 +21,13 @@ const TAG_ICON: Partial<Record<TowerTag, string>> = {
 
 const STAT_ICON: Partial<Record<StatKey, string>> = {
   damage: 'icon_hammer', attackSpeed: 'icon_bolt', range: 'icon_eye', projectiles: 'icon_arrows',
-  goldGain: 'icon_gold', interest: 'icon_gold', kingDamage: 'icon_crown', kingAbilityCooldown: 'icon_crown',
+  crystalGain: 'icon_rift', interest: 'icon_rift', kingDamage: 'icon_crown', kingAbilityCooldown: 'icon_crown',
   enemySpeed: 'icon_skull', airDamage: 'icon_air', splashRadius: 'top_cannon', chainTargets: 'top_mage',
   slowStrength: 'top_frost', armorPen: 'icon_metall', critChance: 'icon_kristall', towerCost: 'icon_wall',
 };
 
 export function cardIcon(card: CardDef): string {
-  if (card.instant?.gold) return 'icon_gold';
+  if (card.instant?.crystals) return 'icon_rift';
   if (card.instant?.heal) return 'icon_heart';
   const m = card.modifiers?.[0];
   if (!m) return 'icon_kristall';

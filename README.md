@@ -12,11 +12,11 @@ deine Stadt dauerhaft aus.
 
 ## Features
 
-- Jede Nacht eine neue Karte mit eigenen Feldern, Gegnern und Bossen
+- **Tag:** eine eigene Stadt mit Bauplätzen, Gebäuden, Upgrades und Forschung – sie schaltet nach und nach neue Türme frei
+- **Nacht:** jede Nacht eine neue Karte mit eigenen Feldern, Gegnern und Bossen
 - Boden- und Fluggegner, verschiedene Turmarten mit mehreren Stufen
-- Der König verteidigt selbst das Tor
-- Upgrade-Karten in vier Seltenheitsstufen
-- Dauerhafte Stadt-Gebäude, die mit jeder Nacht stärker machen
+- Der König verteidigt das Tor – oder zieht los, um Rohstoffe abzubauen
+- Upgrade-Karten in vier Seltenheitsstufen, Story-Nächte mit Belohnungen
 
 ## Entwicklung
 

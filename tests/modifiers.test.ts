@@ -13,8 +13,8 @@ describe('Modifikatoren', () => {
   });
 
   it('Turm-Boni gelten nicht für allgemeine Werte', () => {
-    const m = new Modifiers([{ stat: 'goldGain', kind: 'pct', value: 0.2, towerTags: ['bow'] }]);
-    expect(m.pct('goldGain')).toBe(0);
+    const m = new Modifiers([{ stat: 'crystalGain', kind: 'pct', value: 0.2, towerTags: ['bow'] }]);
+    expect(m.pct('crystalGain')).toBe(0);
   });
 
   it('nie unter 0', () => {

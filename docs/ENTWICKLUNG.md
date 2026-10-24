@@ -14,7 +14,7 @@ Ist das Handy im selben WLAN, kann man das Spiel damit direkt auf dem Handy öff
 |---|---|
 | `npm test` | Automatische Tests der Spiellogik (Karten, Wellen, Belohnungen, Speichern) |
 | `npm run build` | Fertige Version im Ordner `dist/` bauen |
-| `npm run smoke` | Spiel im unsichtbaren Browser starten, eine Nacht automatisch spielen, Screenshots in `screenshots/` |
+| `npm run smoke` | Spiel im unsichtbaren Browser starten, Stadt wie im Tutorial aufbauen, eine Nacht automatisch spielen, Screenshots in `screenshots/` (Optionen: `--night N`, `--full-city`, `--quick`, `--defeat`) |
 
 Mit `?debug` hinter der Adresse gibt es in der Browser-Konsole Hilfen, z. B. `rift.go('Battle', { night: 5 })`.
 
@@ -28,10 +28,10 @@ Einmalig einschalten: **Settings → Pages → Source: „GitHub Actions“**.
 ```
 src/
   config.ts          Layout und Balancing (Startgold, Schwierigkeit, Werbung …)
-  data/              Alle Spielinhalte: Türme, Gegner, Rifts, Karten, Gebäude, König
-  core/              Spiellogik ohne Grafik (Kartengenerator, Wellen, Boni, Speichern) – mit Tests
+  data/              Alle Spielinhalte: Türme, Gegner, Rifts, Karten, Gebäude, Bauplätze, Forschung, Story, König
+  core/              Spiellogik ohne Grafik (Kartengenerator, Wellen, Stadt, Boni, Speichern) – mit Tests
   battle/            Der Kampf: Szene, Gegner/Türme, Menüs, obere Leiste
-  scenes/            Menü, Stadt, Ergebnis
+  scenes/            Menü, Stadt (Tag-Sphäre), Ergebnis
   game/textures.ts   Alle Grafiken (per Code gezeichnet)
   ui/                Knöpfe, Dialoge, Kartenauswahl
   services/ads.ts    Werbung (Platzhalter)

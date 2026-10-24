@@ -19,8 +19,8 @@ export interface CardDef {
   rarity: Rarity;
   description: string;
   modifiers?: readonly Modifier[];
-  /** Sofort-Effekte beim Wählen */
-  instant?: { gold?: number; heal?: number };
+  /** Sofort-Effekte beim Wählen (Rift-Kristalle bzw. Tor-Leben) */
+  instant?: { crystals?: number; heal?: number };
   /** Wie oft man die Karte höchstens nehmen kann (Standard: unbegrenzt) */
   maxStacks?: number;
 }
@@ -60,8 +60,8 @@ export const CARDS: readonly CardDef[] = [
   },
   {
     id: 'kriegskasse', name: 'Kriegskasse', rarity: 'common',
-    description: 'Sofort +80 Gold',
-    instant: { gold: 80 },
+    description: 'Sofort +80 Rift-Kristalle',
+    instant: { crystals: 80 },
   },
   {
     id: 'maurer', name: 'Maurerkolonne', rarity: 'common',
@@ -82,8 +82,8 @@ export const CARDS: readonly CardDef[] = [
   },
   {
     id: 'kopfgeld', name: 'Kopfgeld', rarity: 'rare',
-    description: 'Gegner geben +20 % Gold',
-    modifiers: [{ stat: 'goldGain', kind: 'pct', value: 0.2 }],
+    description: 'Gegner geben +20 % Rift-Kristalle',
+    modifiers: [{ stat: 'crystalGain', kind: 'pct', value: 0.2 }],
   },
   {
     id: 'baumeister', name: 'Baumeister', rarity: 'rare',
@@ -123,7 +123,7 @@ export const CARDS: readonly CardDef[] = [
   },
   {
     id: 'zinsen', name: 'Zinsen', rarity: 'epic',
-    description: 'Nach jeder Welle 10 % Zinsen auf dein Gold (höchstens 50)',
+    description: 'Nach jeder Welle 10 % Zinsen auf deine Rift-Kristalle (höchstens 50)',
     modifiers: [{ stat: 'interest', kind: 'flat', value: 0.1 }],
     maxStacks: 2,
   },

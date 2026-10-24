@@ -25,16 +25,16 @@ export const GATE_X = 84;
 export const FONT = '"Trebuchet MS", "Segoe UI", Roboto, Arial, sans-serif';
 
 export const BALANCE = {
-  /** Gold zu Beginn jeder Nacht (plus Schatzkammer): startGold + startGoldPerNight × (Nacht − 1). */
-  startGold: 200,
-  startGoldPerNight: 30,
+  /** Rift-Kristalle zu Beginn jeder Nacht: startCrystals + startCrystalsPerNight × (Nacht − 1) (+ Stadt-Boni). */
+  startCrystals: 200,
+  startCrystalsPerNight: 30,
   /** Leben des Stadttors (plus Stadtmauer). */
   gateHp: 20,
   /** Anteil der Baukosten, den man beim Verkaufen zurückbekommt. */
   sellRefund: 0.6,
-  /** Gold-Bonus für jede geschaffte Welle: base + perWave * Wellennummer. */
-  waveClearGoldBase: 20,
-  waveClearGoldPerWave: 4,
+  /** Rift-Kristall-Bonus für jede geschaffte Welle: base + perWave * Wellennummer. */
+  waveClearCrystalsBase: 20,
+  waveClearCrystalsPerWave: 4,
   /** Nach so vielen Wellen darf man eine Upgrade-Karte wählen. */
   cardEveryWaves: 3,
   /** Wellen pro Nacht: base + ceil(Nacht / 2), höchstens max. */
@@ -53,13 +53,34 @@ export const BALANCE = {
   /** Ab dieser Nacht kann es zwei Wege geben, ab maxPathsFromNight immer. */
   secondPathFromNight: 4,
   maxPathsFromNight: 7,
-  /** Werbung ansehen nach Niederlage: Welle wiederholen + so viel Gold. */
-  adContinueGold: 100,
-  /** Belohnung bei Niederlage: Anteil × (geschaffte Wellen / alle Wellen). */
-  defeatRewardFactor: 0.5,
+  /** Werbung ansehen nach Niederlage: Welle wiederholen + so viele Rift-Kristalle. */
+  adContinueCrystals: 100,
+  /** Bei Niederlage behält man diesen Anteil der gesammelten Beute. */
+  defeatLootFactor: 0.5,
+  /** Siegprämie in Gold: base + perNight × Nacht */
+  victoryGoldBase: 20,
+  victoryGoldPerNight: 5,
+  /** Chance, dass ein Gegner Gold fallen lässt; Menge ≈ Rift-Kristalle / goldDropDivisor */
+  goldDropChance: 0.15,
+  goldDropDivisor: 3,
+  /** Sekunden, die Beute liegen bleibt, bevor sie in die Leiste fliegt */
+  dropLingerSeconds: 1.2,
+  /** König: Lauftempo (Felder/Sekunde) und Abbauzeit eines Rohstoff-Felds (Sekunden) */
+  kingMoveSpeed: 1.8,
+  harvestSeconds: 3,
+  /** Sammler (Holzfäller-Upgrade): Sekunden zwischen zwei Abbauten, geteilt durch die Anzahl Sammler */
+  autoHarvestSeconds: 25,
   /**
    * false: Upgrade-Karten gelten nur für die aktuelle Nacht (wie die Türme).
    * true: Karten bleiben über Nächte hinweg erhalten.
    */
   cardsPersistAcrossNights: false,
+} as const;
+
+/** Stadt (Tag-Sphäre) */
+export const CITY = {
+  /** Bauzeit für Gebäude, Ausbauten und Forschung in Sekunden (Platzhalter) */
+  buildSeconds: 5,
+  /** Startressourcen eines neuen Spiels */
+  startResources: { gold: 60, holz: 120, stein: 50, magie: 0, nahrung: 30 },
 } as const;

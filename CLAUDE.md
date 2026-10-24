@@ -16,7 +16,7 @@ npm run dev            # Dev-Server (Port 5173, --host)
 npm test               # Vitest, nur src/core + data (Node, ohne Browser)
 npm run typecheck
 npm run build          # tsc + vite build → dist/
-npm run smoke          # Playwright: Screenshots + Bot spielt Nacht 1 (Optionen: --night N, --quick, --defeat)
+npm run smoke          # Playwright: Stadt-Tutorial + Bot spielt Nacht 1 (Optionen: --night N, --full-city, --quick, --defeat)
 ```
 
 Nach Änderungen an Spiellogik: `npm test`. Nach Änderungen an Grafik/UI/Kampf: `npm run smoke` und Screenshots
@@ -27,14 +27,20 @@ in `screenshots/` ansehen. `smoke` bricht bei JavaScript-Fehlern im Browser ab.
 - `src/data/*` – **alle Inhalte als Daten** (Türme, Gegner, Rifts inkl. Felder, Karten, Gebäude, König).
   Neue Inhalte gehören hierher; Anleitung in `docs/INHALTE_ERWEITERN.md`.
 - `src/core/*` – reine Logik ohne Phaser (testbar): `mapgen` (Wege + Felder), `wavegen` (Wellen-Budget),
-  `progression` (Rift pro Nacht, Belohnungen, Gebäudekosten/-boni), `draft` (Karten ziehen), `save` (localStorage),
+  `progression` (Rift/Story pro Nacht, Belohnungen), `city` (Tag-Sphäre: Bauplätze, Bauen mit Bauzeit, Upgrades,
+  Forschung, Stadt-Boni, freigeschaltete Türme), `draft` (Karten ziehen), `save` (localStorage, Version 2 + Migration),
   `modifiers` (Boni-System), `route` (Laufweg als Linienzug), `rng` (Seed-Zufall).
+- Zwei Sphären: **Tag** = `CityScene` (Stadt, dauerhafte Ressourcen Gold/Holz/Stein/Magie/Nahrung),
+  **Nacht** = `BattleScene` (Währung Rift-Kristalle, verfällt). Türme gibt es nur, wenn ein Gebäude sie in
+  `unlocksTowers` hat; Limit/Max-Stufe pro Turmart über `towerLimit`/`towerMaxLevel`-Modifikatoren.
+- Bauzeiten/Forschung laufen über Zeitstempel (`Job.finishAt`) im Spielstand; `completeJobs()` schließt ab.
 - **Boni-System:** Karten, Gebäude, Rift-Effekte und Felder liefern alle `Modifier { stat, kind: 'pct'|'flat', value, towerTags? }`.
   `Modifiers.apply(stat, base, tags)` = (base + flat) × (1 + pct). Neue Effekte möglichst als neuer `StatKey`
   in `core/types.ts` + Label in `core/modifiers.ts` + Auswertung in `BattleScene` umsetzen.
 - `src/battle/BattleScene.ts` – Kampfregeln (Spawns, Bewegung, Zielwahl, Schaden, Fähigkeiten, Sieg/Niederlage,
-  Snapshot pro Welle für „Werbung: Welle wiederholen“). `entities.ts` = Gegner/Turm/Projektil, `menus.ts` = Bau-/Turm-/Königsmenü,
-  `hud.ts` = obere Leiste + Pfeilhagel-Knopf.
+  Snapshot pro Welle für „Werbung: Welle wiederholen“, König läuft zu Rohstoff-Feldern, Sammler).
+  `entities.ts` = Gegner/Turm/Projektil, `drops.ts` = einfliegende Beute, `menus.ts` = Bau-/Turm-/Königs-/Abbau-Menü,
+  `hud.ts` = obere Leiste, Beute-Anzeige, Pfeilhagel-Knopf.
 - Szenen: Boot (Texturen) → Menu → City → Battle → Result → City. `init()` setzt den Szenenzustand zurück
   (Phaser verwendet Szenen-Instanzen wieder – Klassenfelder werden NICHT neu initialisiert).
 - Seeds: `setupNight(saveSeed, night)` ist deterministisch → Neustart einer Nacht = gleiche Karte und Wellen.
@@ -42,7 +48,8 @@ in `screenshots/` ansehen. `smoke` bricht bei JavaScript-Fehlern im Browser ab.
   `tile_<rift>_<tile>`, `top_<tower>`, `tower_base_<1-3>`, `enemy_<id>`, `proj_<style>`, `portal_<rift>`, `icon_*`, `fx_*`.
   Echte Grafiken später unter denselben Schlüsseln laden.
 - Layout: logisch 1280×720, `Scale.FIT`. Karte 16×9 Felder à 72 px ab (128, 72); links Mauer/Tor/König, oben HUD.
-- Debug: `?debug` in der URL → `window.rift` (`go(scene, data)`, `battle()`, `save`). Wird von `scripts/smoke.mjs` genutzt.
+- Debug: `?debug` in der URL → `window.rift` (`go(scene, data)`, `battle()`, `save`, `button(label)` = Knopf-Position).
+  Wird von `scripts/smoke.mjs` genutzt (`--full-city` für Tests späterer Nächte mit allen Türmen).
 
 ## Konventionen
 

@@ -1,11 +1,40 @@
+import { CITY } from '../config';
 import { randomSeed } from './rng';
 import { RESOURCE_IDS, emptyResources, type Resources } from './types';
 
 // Spielstand: wird im Browser (localStorage) gespeichert.
 // Später kann hier ein Cloud-Speicher angebunden werden (siehe docs/ROADMAP.md).
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 const STORAGE_KEY = 'riftdefense.save';
+
+/** Ein laufender Bauauftrag (Bauen/Ausbauen) oder eine laufende Forschung. */
+export interface Job {
+  kind: 'build' | 'upgrade' | 'research';
+  /** Bauplatz (bei build/upgrade) */
+  plotId?: string;
+  /** Gebäude- bzw. Forschungs-ID */
+  id: string;
+  /** Zeitpunkt der Fertigstellung (Date.now()-Millisekunden) */
+  finishAt: number;
+}
+
+export interface CityState {
+  /** Bauplatz-ID → fertiges Gebäude mit Stufe */
+  plots: Record<string, { building: string; level: number }>;
+  /** Mit Gold gekaufte Bauplätze */
+  boughtPlots: string[];
+  /** Upgrade-ID → Rang */
+  upgrades: Record<string, number>;
+  /** Abgeschlossene Forschungen */
+  research: string[];
+  /** Abgeschlossene Story-Nächte (schalten Gebäude frei) */
+  story: string[];
+  /** Laufender Bauauftrag (höchstens einer) */
+  job: Job | null;
+  /** Laufende Forschung (höchstens eine) */
+  researchJob: Job | null;
+}
 
 export interface SaveData {
   version: number;
@@ -14,8 +43,7 @@ export interface SaveData {
   /** Die nächste (noch nicht geschaffte) Nacht */
   night: number;
   resources: Resources;
-  /** Gebäude-ID → Stufe */
-  buildings: Record<string, number>;
+  city: CityState;
   /** Nur genutzt, wenn BALANCE.cardsPersistAcrossNights = true */
   cards: string[];
   stats: {
@@ -26,8 +54,13 @@ export interface SaveData {
   };
   settings: {
     speed: number;
+    /** Tutorial im ersten Kampf erledigt */
     tutorialDone: boolean;
   };
+}
+
+export function emptyCity(): CityState {
+  return { plots: {}, boughtPlots: [], upgrades: {}, research: [], story: [], job: null, researchJob: null };
 }
 
 export function defaultSave(seed = randomSeed()): SaveData {
@@ -35,27 +68,36 @@ export function defaultSave(seed = randomSeed()): SaveData {
     version: SAVE_VERSION,
     seed,
     night: 1,
-    resources: emptyResources(),
-    buildings: {},
+    resources: { ...emptyResources(), ...CITY.startResources },
+    city: emptyCity(),
     cards: [],
     stats: { bestNight: 0, nightsWon: 0, defeats: 0, enemiesKilled: 0 },
     settings: { speed: 1, tutorialDone: false },
   };
 }
 
-/** Ergänzt fehlende Felder, damit alte Spielstände nach Updates weiter funktionieren. */
+/** Ergänzt fehlende Felder und wandelt alte Spielstände um, damit sie nach Updates weiter funktionieren. */
 export function migrateSave(raw: unknown): SaveData {
   const base = defaultSave();
   if (!raw || typeof raw !== 'object') return base;
-  const r = raw as Partial<SaveData>;
+  const r = raw as Partial<SaveData> & { resources?: Record<string, unknown> };
+  const oldVersion = num(r.version, 1);
   const resources = emptyResources();
   for (const id of RESOURCE_IDS) resources[id] = num(r.resources?.[id], 0);
+  let city: CityState = { ...emptyCity(), ...(r.city ?? {}) };
+  if (oldVersion < 2) {
+    // Version 1 hatte Holz/Metall/Kristall und andere Gebäude: Ressourcen umwandeln, Stadt neu beginnen
+    resources.stein += num(r.resources?.metall, 0);
+    resources.magie += num(r.resources?.kristall, 0);
+    for (const id of RESOURCE_IDS) resources[id] = Math.max(resources[id], base.resources[id]);
+    city = emptyCity();
+  }
   return {
     version: SAVE_VERSION,
     seed: num(r.seed, base.seed),
     night: Math.max(1, Math.floor(num(r.night, 1))),
     resources,
-    buildings: { ...(r.buildings ?? {}) },
+    city,
     cards: Array.isArray(r.cards) ? r.cards.filter((c): c is string => typeof c === 'string') : [],
     stats: { ...base.stats, ...(r.stats ?? {}) },
     settings: { ...base.settings, ...(r.settings ?? {}) },

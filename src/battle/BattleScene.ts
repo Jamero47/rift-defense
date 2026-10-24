@@ -1,25 +1,29 @@
 import Phaser from 'phaser';
 import { BALANCE, COLS, GAME_HEIGHT, GAME_WIDTH, GATE_ROW, GATE_X, MAP_X, MAP_Y, ROWS, TILE } from '../config';
 import { rollCards } from '../core/draft';
+import { cityModifiers, unlockedTowers } from '../core/city';
 import { Modifiers } from '../core/modifiers';
-import { buildingModifiers, cardModifiers, computeRewards, setupNight, type NightSetup } from '../core/progression';
+import { cardModifiers, computeRewards, setupNight, type NightSetup } from '../core/progression';
 import { Rng, randomSeed } from '../core/rng';
 import { Route, simplifyPoints } from '../core/route';
 import { saveStore } from '../core/save';
-import type { GridPos, Modifier, Vec } from '../core/types';
+import { RESOURCE_IDS, addResources, emptyResources, type GridPos, type Modifier, type Resources, type Vec } from '../core/types';
 import type { WaveDef } from '../core/wavegen';
 import type { CardDef } from '../data/cards';
 import { getCard } from '../data/cards';
+import { getBuilding } from '../data/buildings';
 import { getEnemy, type EnemyAbility } from '../data/enemies';
 import { KING, KING_MAX_LEVEL } from '../data/king';
 import type { RiftDef, TileDef } from '../data/rifts';
+import { RIFT_CRYSTAL } from '../data/resources';
 import { getTower, type TowerDef, type TowerLevel } from '../data/towers';
 import { tileKey } from '../game/textures';
 import { ads } from '../services/ads';
 import { showCardDraft } from '../ui/cardDraft';
 import { COLORS, addText, floatText, showDialog } from '../ui/widgets';
+import { DropManager, type DropKind } from './drops';
 import { Enemy, FLY_HEIGHT, Projectile, Tower, type HitInfo, type TargetMode, type TowerStats } from './entities';
-import { Hud } from './hud';
+import { Hud, LOOT_PANEL } from './hud';
 import { BattleMenus } from './menus';
 import type { ResultData } from '../scenes/ResultScene';
 
@@ -44,7 +48,7 @@ export const DEPTH = {
 
 /** Zustand zu Beginn einer Welle – für "Werbung ansehen: Welle wiederholen". */
 interface Snapshot {
-  gold: number;
+  crystals: number;
   gateHp: number;
   cards: string[];
   kingLevel: number;
@@ -68,6 +72,8 @@ interface Beam {
   width: number;
 }
 
+export type KingMode = 'home' | 'walking' | 'harvesting' | 'returning';
+
 export interface KingStats {
   damage: number;
   attackSpeed: number;
@@ -86,8 +92,17 @@ export class BattleScene extends Phaser.Scene {
   mods = new Modifiers();
   private staticMods: Modifier[] = [];
   cards: string[] = [];
+  /** Türme, die die Stadt freigeschaltet hat */
+  availableTowers: string[] = [];
+  /** Aktuelle Felder (abgebaute Rohstoffe werden zu Boden) */
+  private tiles: string[][] = [];
+  private tileImages: Phaser.GameObjects.Image[][] = [];
 
-  gold = 0;
+  /** Rift-Kristalle: Währung im Kampf */
+  crystals = 0;
+  /** Gesammelte Beute für die Stadt */
+  loot: Resources = emptyResources();
+  private drops!: DropManager;
   gateHp = 0;
   gateMaxHp = 0;
   /** Anzahl geschaffter Wellen */
@@ -107,7 +122,15 @@ export class BattleScene extends Phaser.Scene {
   private currentWave: WaveDef | null = null;
 
   kingLevel = 1;
-  readonly kingPos: Vec = { x: MAP_X - 6, y: MAP_Y + GATE_ROW * TILE + TILE / 2 - 30 };
+  /** Platz des Königs vor dem Tor */
+  readonly kingHome: Vec = { x: MAP_X - 6, y: MAP_Y + GATE_ROW * TILE + TILE / 2 - 30 };
+  kingPos: Vec = { ...this.kingHome };
+  kingMode: KingMode = 'home';
+  /** Feld, das der König gerade abbauen soll */
+  kingTarget: GridPos | null = null;
+  harvestLeft = 0;
+  harvestTotal = 1;
+  private autoHarvestTimer = 0;
   private kingCooldown = 0;
   abilityCooldown = 0;
   abilityTargeting = false;
@@ -141,10 +164,14 @@ export class BattleScene extends Phaser.Scene {
     this.setup = setupNight(save.seed, data.night ?? save.night);
     this.rift = this.setup.rift;
     this.waves = this.setup.waves;
-    this.staticMods = [...buildingModifiers(save.buildings), ...this.rift.globalEffect.modifiers];
+    this.staticMods = [...cityModifiers(save.city), ...this.rift.globalEffect.modifiers];
+    this.availableTowers = unlockedTowers(save.city);
+    this.tiles = this.setup.map.tiles.map((row) => [...row]);
+    this.tileImages = [];
     this.cards = BALANCE.cardsPersistAcrossNights ? [...save.cards] : [];
     this.recomputeMods();
-    this.gold = Math.round(this.mods.apply('startGold', BALANCE.startGold + BALANCE.startGoldPerNight * (this.setup.night - 1)));
+    this.crystals = Math.round(this.mods.apply('startCrystals', BALANCE.startCrystals + BALANCE.startCrystalsPerNight * (this.setup.night - 1)));
+    this.loot = emptyResources();
     this.gateHp = this.gateMaxHp;
     this.waveIndex = 0;
     this.phase = 'build';
@@ -159,6 +186,11 @@ export class BattleScene extends Phaser.Scene {
     this.waveTime = 0;
     this.currentWave = null;
     this.kingLevel = 1;
+    this.kingPos = { ...this.kingHome };
+    this.kingMode = 'home';
+    this.kingTarget = null;
+    this.harvestLeft = 0;
+    this.autoHarvestTimer = BALANCE.autoHarvestSeconds / 2;
     this.kingCooldown = 0;
     this.abilityCooldown = 0;
     this.abilityTargeting = false;
@@ -183,14 +215,20 @@ export class BattleScene extends Phaser.Scene {
     this.hpGfx = this.add.graphics().setDepth(DEPTH.hp);
     this.fxGfx = this.add.graphics().setDepth(DEPTH.fx);
     this.kingSprite = this.add.image(this.kingPos.x, this.kingPos.y, 'king').setDepth(DEPTH.king);
-    this.tweens.add({ targets: this.kingSprite, y: this.kingPos.y - 3, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     this.hud = new Hud(this);
+    this.drops = new DropManager(this, DEPTH.fx + 5, (kind) => this.dropTarget(kind), (kind, amount) => this.creditDrop(kind, amount));
     this.menus = new BattleMenus(this);
     this.input.on('pointerup', this.onPointerUp, this);
     this.hud.setPreview(this.waves[0]);
     this.showTutorial();
     this.banner(`Nacht ${this.setup.night}`, this.rift.name, this.rift.color);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.drops.flushAll());
+    const story = this.setup.story;
+    if (story && !saveStore.get().city.story.includes(story.id)) {
+      this.paused = true;
+      showDialog(this, story.title, story.intro, [{ label: 'Zur Verteidigung!', onClick: () => (this.paused = false) }], { titleColor: COLORS.gold });
+    }
   }
 
   update(_time: number, deltaMs: number): void {
@@ -228,11 +266,13 @@ export class BattleScene extends Phaser.Scene {
       });
     }
     for (let row = 0; row < ROWS; row++) {
+      this.tileImages.push([]);
       for (let col = 0; col < COLS; col++) {
         const tile = this.tileAt(col, row);
         const img = this.add.image(MAP_X + col * TILE + TILE / 2, MAP_Y + row * TILE + TILE / 2, tileKey(this.rift.id, tiles[row][col])).setDepth(DEPTH.tiles);
         // Texturen zeigen nach links (Winkel π) – passend zur Laufrichtung drehen
         if (tile.deco === 'conveyor') img.setRotation((direction.get(`${col},${row}`) ?? Math.PI) - Math.PI);
+        this.tileImages[row].push(img);
       }
     }
     // Wegränder
@@ -317,7 +357,7 @@ export class BattleScene extends Phaser.Scene {
       else this.setAbilityTargeting(false);
       return;
     }
-    if (Math.hypot(x - this.kingPos.x, y - this.kingPos.y) < 42) {
+    if (Math.hypot(x - this.kingPos.x, y - this.kingPos.y) < 40) {
       this.menus.openKing();
       return;
     }
@@ -330,22 +370,18 @@ export class BattleScene extends Phaser.Scene {
     const tile = this.tileAt(cell.col, cell.row);
     if (tower) this.menus.openTower(tower);
     else if (tile.buildable) this.menus.openBuild(cell);
+    else if (tile.harvest) this.menus.openHarvest(cell);
     else {
       this.menus.close();
       const c = this.cellCenter(cell);
-      const info = tile.effectText ?? (tile.resource ? `${tile.name}: bringt ${this.resourceName()} nach dem Kampf` : tile.name);
-      floatText(this, c.x, c.y - 10, info, COLORS.text, 16);
+      floatText(this, c.x, c.y - 10, tile.effectText ?? tile.name, COLORS.text, 16);
     }
-  }
-
-  private resourceName(): string {
-    return { holz: 'Holz', metall: 'Metall', kristall: 'Kristall' }[this.rift.reward.resource];
   }
 
   // ================================================================ Hilfen
 
   tileAt(col: number, row: number): TileDef {
-    return this.rift.tiles[this.setup.map.tiles[row][col]];
+    return this.rift.tiles[this.tiles[row][col]];
   }
 
   toCell(x: number, y: number): GridPos | null {
@@ -365,6 +401,26 @@ export class BattleScene extends Phaser.Scene {
 
   towerCost(level: TowerLevel): number {
     return Math.round(level.cost * Math.max(0.3, 1 + this.mods.pct('towerCost')));
+  }
+
+  /** Wie viele Türme dieser Art darf man bauen? */
+  towerLimit(def: TowerDef): number {
+    return Math.max(0, Math.round(this.mods.apply('towerLimit', def.baseLimit, def.tags)));
+  }
+
+  towerCount(def: TowerDef): number {
+    return this.towers.filter((t) => t.def.id === def.id).length;
+  }
+
+  /** Bis zu welcher Stufe darf man diesen Turm verbessern? */
+  towerMaxLevel(def: TowerDef): number {
+    return Math.min(def.levels.length, Math.max(1, Math.round(this.mods.apply('towerMaxLevel', def.baseMaxLevel, def.tags))));
+  }
+
+  /** Welches Gebäude schaltet diesen Turm frei? (für Hinweise) */
+  towerSource(def: TowerDef): string {
+    const id = { bow: 'bogenmacher', ballista: 'bogenmacher', cannon: 'giesserei', mage: 'akademie', frost: 'akademie' }[def.id];
+    return id ? getBuilding(id).name : 'Stadt';
   }
 
   recomputeMods(): void {
@@ -413,11 +469,16 @@ export class BattleScene extends Phaser.Scene {
     const def = getTower(towerId);
     const cost = this.towerCost(def.levels[0]);
     const c = this.cellCenter(cell);
-    if (this.gold < cost) {
-      floatText(this, c.x, c.y, 'Nicht genug Gold', COLORS.bad);
+    if (!this.availableTowers.includes(def.id)) return false;
+    if (this.towerCount(def) >= this.towerLimit(def)) {
+      floatText(this, c.x, c.y, `Höchstens ${this.towerLimit(def)} – mehr im Gebäude ${this.towerSource(def)}`, COLORS.bad, 16);
       return false;
     }
-    this.gold -= cost;
+    if (this.crystals < cost) {
+      floatText(this, c.x, c.y, 'Nicht genug Rift-Kristalle', COLORS.bad);
+      return false;
+    }
+    this.crystals -= cost;
     const tower = new Tower(this, def, cell.col, cell.row, c.x, c.y, tile, DEPTH.towers);
     tower.spent = cost;
     tower.stats = this.computeTowerStats(def, 1, tile);
@@ -429,13 +490,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   upgradeTower(t: Tower): boolean {
-    if (t.level >= t.def.levels.length) return false;
+    if (t.level >= this.towerMaxLevel(t.def)) return false;
     const cost = this.towerCost(t.def.levels[t.level]);
-    if (this.gold < cost) {
-      floatText(this, t.x, t.y, 'Nicht genug Gold', COLORS.bad);
+    if (this.crystals < cost) {
+      floatText(this, t.x, t.y, 'Nicht genug Rift-Kristalle', COLORS.bad);
       return false;
     }
-    this.gold -= cost;
+    this.crystals -= cost;
     t.spent += cost;
     t.setLevel(t.level + 1);
     t.stats = this.computeTowerStats(t.def, t.level, t.tile);
@@ -448,8 +509,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   sellTower(t: Tower): void {
-    this.gold += this.sellValue(t);
-    floatText(this, t.x, t.y, `+${this.sellValue(t)}`, COLORS.gold);
+    this.crystals += this.sellValue(t);
+    floatText(this, t.x, t.y, `+${this.sellValue(t)}`, RIFT_CRYSTAL.color);
     this.towerAt[t.row][t.col] = null;
     this.towers = this.towers.filter((x) => x !== t);
     t.destroy();
@@ -463,11 +524,11 @@ export class BattleScene extends Phaser.Scene {
   upgradeKing(): boolean {
     const cost = this.kingUpgradeCost();
     if (cost === null) return false;
-    if (this.gold < cost) {
-      floatText(this, this.kingPos.x + 40, this.kingPos.y, 'Nicht genug Gold', COLORS.bad);
+    if (this.crystals < cost) {
+      floatText(this, this.kingPos.x + 40, this.kingPos.y, 'Nicht genug Rift-Kristalle', COLORS.bad);
       return false;
     }
-    this.gold -= cost;
+    this.crystals -= cost;
     this.kingLevel++;
     this.ringFx(this.kingPos.x, this.kingPos.y, 0xfacc15, 0.8);
     return true;
@@ -495,10 +556,10 @@ export class BattleScene extends Phaser.Scene {
 
   private onWaveCleared(): void {
     this.waveIndex++;
-    const bonus = BALANCE.waveClearGoldBase + BALANCE.waveClearGoldPerWave * this.waveIndex;
-    const interest = Math.min(50, Math.floor(this.gold * this.mods.flat('interest')));
-    this.gold += bonus + interest;
-    floatText(this, GAME_WIDTH / 2, MAP_Y + 140, `Welle geschafft! +${bonus + interest} Gold`, COLORS.gold, 26);
+    const bonus = BALANCE.waveClearCrystalsBase + BALANCE.waveClearCrystalsPerWave * this.waveIndex;
+    const interest = Math.min(50, Math.floor(this.crystals * this.mods.flat('interest')));
+    this.crystals += bonus + interest;
+    floatText(this, GAME_WIDTH / 2, MAP_Y + 140, `Welle geschafft! +${bonus + interest} Rift-Kristalle`, RIFT_CRYSTAL.color, 26);
     this.currentWave = null;
 
     if (this.waveIndex >= this.waves.length) {
@@ -506,6 +567,7 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     this.hud.setPreview(this.waves[this.waveIndex]);
+    if (this.tutorialStep === 2 && this.waveIndex >= 2) this.advanceTutorial();
     if (this.waveIndex % BALANCE.cardEveryWaves === 0) this.openDraft();
     else this.phase = 'build';
   }
@@ -514,7 +576,8 @@ export class BattleScene extends Phaser.Scene {
     this.phase = 'draft';
     this.menus.close();
     const luck = this.mods.flat('cardLuck') + this.draftsDone * 0.4;
-    const roll = () => rollCards(this.rng, this.cards, luck);
+    const tags = new Set(this.availableTowers.flatMap((id) => getTower(id).tags));
+    const roll = () => rollCards(this.rng, this.cards, luck, 3, tags);
     showCardDraft(this, {
       cards: roll(),
       owned: this.cards,
@@ -525,13 +588,13 @@ export class BattleScene extends Phaser.Scene {
       },
       onPick: (card) => this.pickCard(card),
     });
-    if (this.tutorialStep === 2) this.advanceTutorial();
+    if (this.tutorialStep === 3) this.advanceTutorial();
   }
 
   pickCard(card: CardDef): void {
     this.cards.push(card.id);
     this.draftsDone++;
-    if (card.instant?.gold) this.gold += card.instant.gold;
+    if (card.instant?.crystals) this.crystals += card.instant.crystals;
     if (card.instant?.heal) this.gateHp = Math.min(this.gateMaxHp, this.gateHp + card.instant.heal);
     this.recomputeMods();
     this.phase = 'build';
@@ -539,7 +602,7 @@ export class BattleScene extends Phaser.Scene {
 
   private makeSnapshot(): Snapshot {
     return {
-      gold: this.gold,
+      crystals: this.crystals,
       gateHp: this.gateHp,
       cards: [...this.cards],
       kingLevel: this.kingLevel,
@@ -550,6 +613,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private restoreSnapshot(s: Snapshot): void {
+    this.drops.flushAll();
     for (const e of this.enemies) e.destroy();
     for (const p of this.projectiles) p.destroy();
     for (const t of this.towers) t.destroy();
@@ -560,12 +624,13 @@ export class BattleScene extends Phaser.Scene {
     this.towerAt = Array.from({ length: ROWS }, () => Array<Tower | null>(COLS).fill(null));
     this.cards = [...s.cards];
     this.recomputeMods();
-    this.gold = s.gold;
+    this.crystals = s.crystals;
     this.gateHp = s.gateHp;
     this.kingLevel = s.kingLevel;
     this.draftsDone = s.draftsDone;
     this.rerollsLeft = s.rerollsLeft;
     for (const st of s.towers) {
+      if (!this.tileAt(st.col, st.row).buildable) continue;
       const def = getTower(st.id);
       const c = this.cellCenter(st);
       const tile = this.tileAt(st.col, st.row);
@@ -599,6 +664,7 @@ export class BattleScene extends Phaser.Scene {
     this.updateKing(dt);
     this.updateProjectiles(dt);
     this.updateStrikes(dt);
+    this.updateAutoHarvest(dt);
     this.abilityCooldown = Math.max(0, this.abilityCooldown - dt);
     if (this.phase === 'wave' && this.spawnQueue.length === 0 && this.enemies.length === 0) this.onWaveCleared();
   }
@@ -789,8 +855,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private updateKing(dt: number): void {
+    this.moveKing(dt);
     this.kingCooldown -= dt;
-    if (this.kingCooldown > 0) return;
+    if (this.kingCooldown > 0 || this.kingMode === 'harvesting') return;
     const k = this.kingStats();
     const targets = this.findTargets(this.kingPos.x, this.kingPos.y, k.range, { ground: true, air: true }, 'first');
     if (targets.length === 0) return;
@@ -798,8 +865,116 @@ export class BattleScene extends Phaser.Scene {
       damage: k.damage, type: 'physical', armorPen: this.mods.flat('armorPen'), crit: this.mods.flat('critChance'),
       airMul: 1, splash: 0, slowStrength: 0, slowDuration: 0,
     };
-    this.projectiles.push(new Projectile(this, this.kingPos.x + 20, this.kingPos.y, targets[0], 10 * TILE, info, 'royal', DEPTH.proj));
+    this.projectiles.push(new Projectile(this, this.kingPos.x + 12, this.kingPos.y, targets[0], 10 * TILE, info, 'royal', DEPTH.proj));
     this.kingCooldown = 1 / k.attackSpeed;
+  }
+
+  /** Schickt den König zu einem Rohstoff-Feld. Dort baut er es ab und kehrt dann zum Tor zurück. */
+  sendKing(cell: GridPos): boolean {
+    if (!this.tileAt(cell.col, cell.row).harvest || this.phase === 'ended') return false;
+    this.kingTarget = cell;
+    this.kingMode = 'walking';
+    this.menus.close();
+    if (this.tutorialStep === 2) this.advanceTutorial();
+    return true;
+  }
+
+  recallKing(): void {
+    this.kingTarget = null;
+    this.kingMode = this.isKingHome() ? 'home' : 'returning';
+  }
+
+  isKingHome(): boolean {
+    return Math.hypot(this.kingPos.x - this.kingHome.x, this.kingPos.y - this.kingHome.y) < 2;
+  }
+
+  private moveKing(dt: number): void {
+    const speed = BALANCE.kingMoveSpeed * TILE * Math.max(0.2, 1 + this.mods.pct('kingMoveSpeed'));
+    if (this.kingMode === 'walking' && this.kingTarget) {
+      const t = this.cellCenter(this.kingTarget);
+      if (this.stepKingTowards(t.x, t.y - 8, speed * dt)) {
+        if (!this.tileAt(this.kingTarget.col, this.kingTarget.row).harvest) {
+          this.recallKing(); // wurde inzwischen von einem Sammler abgebaut
+          return;
+        }
+        this.kingMode = 'harvesting';
+        this.harvestTotal = BALANCE.harvestSeconds / Math.max(0.2, 1 + this.mods.pct('kingHarvestSpeed'));
+        this.harvestLeft = this.harvestTotal;
+      }
+    } else if (this.kingMode === 'harvesting' && this.kingTarget) {
+      this.harvestLeft -= dt;
+      if (this.harvestLeft <= 0) {
+        this.harvestCell(this.kingTarget);
+        this.kingTarget = null;
+        this.kingMode = 'returning';
+      }
+    } else if (this.kingMode === 'returning') {
+      if (this.stepKingTowards(this.kingHome.x, this.kingHome.y, speed * dt)) this.kingMode = 'home';
+    }
+  }
+
+  /** Bewegt den König; true = angekommen. */
+  private stepKingTowards(x: number, y: number, maxStep: number): boolean {
+    const dx = x - this.kingPos.x;
+    const dy = y - this.kingPos.y;
+    const d = Math.hypot(dx, dy);
+    if (d <= maxStep) {
+      this.kingPos = { x, y };
+      return true;
+    }
+    this.kingPos = { x: this.kingPos.x + (dx / d) * maxStep, y: this.kingPos.y + (dy / d) * maxStep };
+    if (Math.abs(dx) > 1) this.kingSprite.setFlipX(dx < 0);
+    return false;
+  }
+
+  /** Baut ein Rohstoff-Feld ab: Beute fällt heraus, das Feld wird zu freiem Bauland. */
+  harvestCell(cell: GridPos): void {
+    const tile = this.tileAt(cell.col, cell.row);
+    if (!tile.harvest) return;
+    const c = this.cellCenter(cell);
+    const mul = Math.max(0, 1 + this.mods.pct('harvestYield'));
+    let offset = -10;
+    for (const id of RESOURCE_IDS) {
+      const v = tile.harvest[id];
+      if (!v) continue;
+      this.drops.spawn(c.x + offset, c.y, id, Math.max(1, Math.round(v * mul)));
+      offset += 20;
+    }
+    this.tiles[cell.row][cell.col] = 'ground';
+    this.tileImages[cell.row]?.[cell.col]?.setTexture(tileKey(this.rift.id, 'ground'));
+    this.burstFx(c.x, c.y, 0xfde68a, 1.2);
+  }
+
+  /** Sammler aus dem Holzfäller bauen während der Wellen selbstständig ab. */
+  private updateAutoHarvest(dt: number): void {
+    const workers = Math.floor(this.mods.flat('autoHarvest'));
+    if (workers <= 0 || this.phase !== 'wave') return;
+    this.autoHarvestTimer -= dt;
+    if (this.autoHarvestTimer > 0) return;
+    this.autoHarvestTimer = BALANCE.autoHarvestSeconds / workers;
+    const cells: GridPos[] = [];
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const reserved = this.kingTarget && this.kingTarget.col === col && this.kingTarget.row === row;
+        if (this.tileAt(col, row).harvest && !reserved) cells.push({ col, row });
+      }
+    }
+    if (cells.length === 0) return;
+    const cell = this.rng.pick(cells);
+    const c = this.cellCenter(cell);
+    floatText(this, c.x, c.y - 20, 'Sammler!', COLORS.good, 15);
+    this.harvestCell(cell);
+  }
+
+  private dropTarget(kind: DropKind): Vec {
+    if (kind === 'crystal') return { x: 232, y: 36 };
+    const i = RESOURCE_IDS.indexOf(kind);
+    return { x: LOOT_PANEL.x + 18, y: LOOT_PANEL.y + 34 + i * LOOT_PANEL.row };
+  }
+
+  private creditDrop(kind: DropKind, amount: number): void {
+    if (kind === 'crystal') this.crystals += amount;
+    else this.loot[kind] += amount;
   }
 
   private updateProjectiles(dt: number): void {
@@ -866,10 +1041,18 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private killEnemy(e: Enemy): void {
-    const gold = Math.round(e.def.gold * Math.max(0, 1 + this.mods.pct('goldGain')));
-    this.gold += gold;
+    const crystals = Math.round(e.def.crystals * Math.max(0, 1 + this.mods.pct('crystalGain')));
     this.kills++;
-    floatText(this, e.x, e.y - 12, `+${gold}`, COLORS.gold, e.def.boss ? 26 : 16);
+    this.drops.spawn(e.x, e.y, 'crystal', crystals);
+    // Beute für die Stadt: manchmal Gold, Spezialgegner und Bosse bringen Ressourcen
+    const lootMul = Math.max(0, 1 + this.mods.pct('lootGain'));
+    if (this.rng.chance(BALANCE.goldDropChance + this.mods.flat('goldDropChance'))) {
+      this.drops.spawn(e.x + 8, e.y, 'gold', Math.max(1, Math.round((e.def.crystals / BALANCE.goldDropDivisor) * lootMul)));
+    }
+    for (const id of RESOURCE_IDS) {
+      const v = e.def.loot?.[id];
+      if (v) this.drops.spawn(e.x - 8, e.y, id, Math.round(v * lootMul));
+    }
     this.burstFx(e.x, e.y, e.def.look.body, e.def.radius / 22);
     e.destroy();
     for (const a of e.def.abilities ?? []) {
@@ -925,13 +1108,14 @@ export class BattleScene extends Phaser.Scene {
   private victory(): void {
     this.phase = 'ended';
     this.outcome = 'victory';
+    this.drops.flushAll();
     const save = saveStore.get();
-    const rewards = computeRewards({
-      rift: this.rift, map: this.setup.map, night: this.setup.night, victory: true,
-      wavesCleared: this.waves.length, totalWaves: this.waves.length, buildingLevels: save.buildings,
-    });
+    const rewards = computeRewards({ night: this.setup.night, victory: true, loot: this.loot, city: save.city });
+    const story = this.setup.story;
+    const newStory = story && !save.city.story.includes(story.id) ? story : undefined;
     saveStore.update((d) => {
-      for (const [id, v] of Object.entries(rewards.total)) d.resources[id as keyof typeof d.resources] += v;
+      addResources(d.resources, rewards.total);
+      if (newStory) d.city.story.push(newStory.id);
       if (d.night === this.setup.night) d.night++;
       d.stats.nightsWon++;
       d.stats.bestNight = Math.max(d.stats.bestNight, this.setup.night);
@@ -940,7 +1124,7 @@ export class BattleScene extends Phaser.Scene {
       if (BALANCE.cardsPersistAcrossNights) d.cards = [...this.cards];
     });
     this.banner('Sieg!', 'Die Nacht ist überstanden', 0xfacc15);
-    this.time.delayedCall(1800, () => this.goToResult(true, rewards));
+    this.time.delayedCall(1800, () => this.goToResult(true, rewards, newStory?.outro, newStory?.unlocksBuilding));
   }
 
   private defeat(): void {
@@ -952,20 +1136,20 @@ export class BattleScene extends Phaser.Scene {
     if (!this.adUsed && this.snapshots[this.waveIndex]) {
       buttons.push({
         label: 'Werbung ansehen',
-        subLabel: `Welle ${waveNo} wiederholen + ${BALANCE.adContinueGold} Gold`,
+        subLabel: `Welle ${waveNo} wiederholen + ${BALANCE.adContinueCrystals} Rift-Kristalle`,
         color: COLORS.royal,
         onClick: () => {
           void ads.showRewarded(this).then((ok) => {
             if (!ok) return this.defeat();
             this.adUsed = true;
             this.restoreSnapshot(this.snapshots[this.waveIndex]);
-            this.gold += BALANCE.adContinueGold;
-            floatText(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, `+${BALANCE.adContinueGold} Gold`, COLORS.gold, 30);
+            this.crystals += BALANCE.adContinueCrystals;
+            floatText(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, `+${BALANCE.adContinueCrystals} Rift-Kristalle`, RIFT_CRYSTAL.color, 30);
           });
         },
       });
     }
-    buttons.push({ label: 'Aufgeben', subLabel: 'Teilbelohnung erhalten', color: COLORS.danger, onClick: () => this.giveUp() });
+    buttons.push({ label: 'Aufgeben', subLabel: `${Math.round(BALANCE.defeatLootFactor * 100)} % der Beute retten`, color: COLORS.danger, onClick: () => this.giveUp() });
     showDialog(this, 'Das Tor ist gefallen!', `Welle ${waveNo} von ${this.waves.length} hat die Stadt überrannt.`, buttons, { titleColor: COLORS.bad });
   }
 
@@ -974,23 +1158,21 @@ export class BattleScene extends Phaser.Scene {
     if (this.outcome !== 'open') return;
     this.phase = 'ended';
     this.outcome = 'defeat';
+    this.drops.flushAll();
     const save = saveStore.get();
-    const rewards = computeRewards({
-      rift: this.rift, map: this.setup.map, night: this.setup.night, victory: false,
-      wavesCleared: this.waveIndex, totalWaves: this.waves.length, buildingLevels: save.buildings,
-    });
+    const rewards = computeRewards({ night: this.setup.night, victory: false, loot: this.loot, city: save.city });
     saveStore.update((d) => {
-      for (const [id, v] of Object.entries(rewards.total)) d.resources[id as keyof typeof d.resources] += v;
+      addResources(d.resources, rewards.total);
       d.stats.defeats++;
       d.stats.enemiesKilled += this.kills;
     });
     this.goToResult(false, rewards);
   }
 
-  private goToResult(victory: boolean, rewards: ResultData['rewards']): void {
+  private goToResult(victory: boolean, rewards: ResultData['rewards'], storyText?: string, unlockedBuilding?: string): void {
     const data: ResultData = {
       victory, night: this.setup.night, riftId: this.rift.id, wavesCleared: this.waveIndex,
-      totalWaves: this.waves.length, kills: this.kills, rewards,
+      totalWaves: this.waves.length, kills: this.kills, rewards, storyText, unlockedBuilding,
     };
     this.scene.start('Result', data);
   }
@@ -1002,7 +1184,7 @@ export class BattleScene extends Phaser.Scene {
     showDialog(this, 'Pause', `Nacht ${this.setup.night} · ${this.rift.name}\nWelle ${Math.min(this.waveIndex + 1, this.waves.length)} von ${this.waves.length}`, [
       { label: 'Weiter', onClick: () => (this.paused = false) },
       { label: 'Nacht neu starten', color: COLORS.buttonAlt, onClick: () => this.scene.restart({ night: this.setup.night }) },
-      { label: 'Aufgeben', subLabel: 'Teilbelohnung erhalten', color: COLORS.danger, onClick: () => this.giveUp() },
+      { label: 'Aufgeben', subLabel: `${Math.round(BALANCE.defeatLootFactor * 100)} % der Beute retten`, color: COLORS.danger, onClick: () => this.giveUp() },
     ]);
   }
 
@@ -1034,6 +1216,23 @@ export class BattleScene extends Phaser.Scene {
         g.lineStyle(2, 0x93c5fd, 0.6);
         g.strokeCircle(e.x, e.y, e.def.radius + 4);
       }
+    }
+
+    // König: Position (sanftes Wippen am Tor) und Abbau-Fortschritt
+    const bob = this.kingMode === 'home' ? Math.sin(this.time.now / 450) * 2 : Math.sin(this.time.now / 90) * 1.5;
+    this.kingSprite.setPosition(this.kingPos.x, this.kingPos.y + bob);
+    if (this.kingMode === 'home') this.kingSprite.setFlipX(false);
+    if (this.kingMode === 'harvesting') {
+      const p = 1 - this.harvestLeft / this.harvestTotal;
+      g.fillStyle(0x000000, 0.7);
+      g.fillRect(this.kingPos.x - 26, this.kingPos.y - 50, 52, 8);
+      g.fillStyle(0xfacc15, 1);
+      g.fillRect(this.kingPos.x - 25, this.kingPos.y - 49, 50 * p, 6);
+    }
+    if (this.kingTarget && this.kingMode === 'walking') {
+      const t = this.cellCenter(this.kingTarget);
+      g.lineStyle(3, 0xfacc15, 0.8);
+      g.strokeRect(t.x - TILE / 2 + 3, t.y - TILE / 2 + 3, TILE - 6, TILE - 6);
     }
 
     const fx = this.fxGfx;
@@ -1077,8 +1276,9 @@ export class BattleScene extends Phaser.Scene {
   // ================================================================ Tutorial (nur Nacht 1)
 
   private static readonly TUTORIAL = [
-    'Tippe auf ein freies Feld neben dem Weg, um einen Turm zu bauen.\nErst Turm antippen = Vorschau, nochmal antippen = bauen.',
+    'Tippe auf ein freies Feld neben dem Weg und beschwöre einen Turm mit Rift-Kristallen.\nErst Turm antippen = Vorschau, nochmal antippen = bauen.',
     'Gut gemacht! Tippe oben rechts auf »Welle starten«.',
+    'Tipp: Tippe auf einen Baum oder Felsen und schicke den König zum Abbauen – das bringt Holz und Stein für die Stadt. Aber dann fehlt er am Tor!',
     'Halte durch! Nach jeder 3. Welle darfst du eine Upgrade-Karte wählen.',
   ];
 
@@ -1103,7 +1303,8 @@ export class BattleScene extends Phaser.Scene {
   /** Für Tests/Entwicklung: aktuelle Karten-Infos. */
   debugInfo(): Record<string, unknown> {
     return {
-      night: this.setup.night, rift: this.rift.id, phase: this.phase, outcome: this.outcome, gold: this.gold, gateHp: this.gateHp,
+      night: this.setup.night, rift: this.rift.id, phase: this.phase, outcome: this.outcome, crystals: this.crystals, gateHp: this.gateHp,
+      loot: { ...this.loot }, king: this.kingMode, available: this.availableTowers,
       wave: this.waveIndex, waves: this.waves.length, enemies: this.enemies.length, towers: this.towers.length,
       cards: this.cards.map((c) => getCard(c).name),
     };

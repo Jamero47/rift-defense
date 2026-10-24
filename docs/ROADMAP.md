@@ -6,18 +6,30 @@
 - [x] Kampf: Karte pro Nacht, 1–2 Wege, Boden- und Fluggegner, 5 Türme, König + Pfeilhagel
 - [x] 3 Rifts mit Sonderfeldern, Spezialgegnern, Bossen, Sondereffekt und Ressourcen
 - [x] Upgrade-Karten (4 Seltenheiten), Stadt mit 12 Gebäuden, Belohnungen, Spielstand
-- [x] Niederlage: Werbung (Platzhalter) → Welle wiederholen + Gold
+- [x] Niederlage: Werbung (Platzhalter) → Welle wiederholen + Rift-Kristalle
+
+## Erledigt (v0.2 – Metaprogression)
+
+- [x] Tag-Sphäre: eigene Stadtkarte mit Berg, Mauer, Bauplätzen (Thronsaal-Stufe oder Gold zum Freischalten)
+- [x] 11 Gebäude mit Bauzeit, Gebäudestufen und eigenen Upgrades; Universität mit Forschung
+- [x] Türme werden durch Gebäude freigeschaltet, Limit und maximale Stufe pro Turmart
+- [x] 5 Ressourcen (Gold, Holz, Stein, Magiekristalle, Nahrung), im Kampf Rift-Kristalle
+- [x] Beute fliegt automatisch ein; König baut Rohstoff-Felder ab; Sammler-Trupps (Holzfäller)
+- [x] Story-Nacht 10 „Der entführte Hofmagier“ schaltet die Magierakademie frei
+- [x] Tutorial: Thronsaal → Bogenmacher → erste Nacht
 
 ## Als Nächstes (Vorschläge)
 
-1. **Selbst spielen und Balancing anpassen** – Zahlen in `src/config.ts` und `src/data/*` (der Test-Bot schafft Nacht 1, Nacht 7 ohne Gebäude nicht)
+1. **Selbst spielen und Balancing anpassen** – Zahlen in `src/config.ts` und `src/data/*`.
+   Wichtig nach v0.2: Die Schwierigkeit späterer Nächte an Turm-Limits und Stadt-Fortschritt anpassen
+   (der Test-Bot verliert Nacht 10 mit mittlerer Stadt in Welle 3). Bauzeiten (jetzt 5 s) festlegen.
 2. **Sound & Musik** (Treffer, Bau, Welle, Sieg/Niederlage)
 3. **Echte Grafik**: Sprites/Pixel-Art statt Code-Grafik (Textur-Schlüssel bleiben gleich, siehe `textures.ts`)
 4. **Animationen**: laufende Gegner, Turm-Schuss-Animation, Tor-Schaden sichtbar
 5. **Nächste Welle früher rufen** (für Bonus-Gold), Wellen-Vorschau mit Gegner-Infos zum Antippen
 6. **Mehr Inhalte**: weitere Rifts (Eiszeit, Unterwelt, Unterwasser …), Türme (Kaserne mit Soldaten, Giftturm), Karten
 7. **Rift-Wahl**: vor der Nacht zwischen 2 Rifts wählen (z. B. leichter vs. mehr Belohnung)
-8. **Stadt als Karte** statt Raster: Gebäude sichtbar in der Stadt, Umland ausbauen
+8. **Stadt lebendiger**: Gebäude-Grafiken auf den Bauplätzen, Bewohner, Umland ausbauen, weitere Story-Nächte
 9. **Mehr Weg-Formen**: Schleifen, Kreuzungen, getrennte Ziele
 10. **Fortschritt mitten in der Nacht speichern** (App schließen und weiterspielen)
 

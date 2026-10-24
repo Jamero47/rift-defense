@@ -1,13 +1,14 @@
-import type { Modifier, ResourceId } from '../core/types';
+import type { Modifier, Resources } from '../core/types';
 import type { EnemyRole } from './enemies';
 
 // Jede Nacht öffnet sich ein Rift und verwandelt das Land vor dem Tor.
-// Ein Rift bestimmt: Aussehen, Felder (mit Boni/Mali), Gegner, Sondereffekt und Belohnung.
+// Ein Rift bestimmt: Aussehen, Felder (mit Boni/Mali), abbaubare Rohstoffe, Gegner und Sondereffekt.
 
 export type TileDeco =
   | 'none' | 'tree' | 'fern' | 'rock' | 'hill' | 'swamp' | 'tar'
   | 'scrap' | 'pipes' | 'crate' | 'energy' | 'jammer' | 'conveyor'
-  | 'crystal' | 'crater' | 'meteor' | 'crystalfield' | 'stardust' | 'gravity';
+  | 'crystal' | 'crater' | 'meteor' | 'crystalfield' | 'stardust' | 'gravity'
+  | 'amber' | 'cell' | 'vines';
 
 export interface TileDef {
   id: string;
@@ -22,8 +23,8 @@ export interface TileDef {
   towerModifiers?: readonly Modifier[];
   /** Tempo-Faktor für Gegner auf diesem Feld (0.6 = 40 % langsamer) */
   enemySpeedFactor?: number;
-  /** Bringt nach dem Kampf Ressourcen (z. B. Bäume → Holz) */
-  resource?: boolean;
+  /** Rohstoff-Feld: Der König (oder ein Sammler) kann es abbauen. Danach wird es zu freiem Bauland. */
+  harvest?: Partial<Resources>;
   /** Kurzer Text für das Baumenü */
   effectText?: string;
 }
@@ -48,28 +49,29 @@ export interface RiftDef {
   generation: {
     blockedTiles: readonly string[];
     blockedDensity: number;
-    resourceTile: string;
+    /** Abbaubare Rohstoff-Felder mit Gewichtung (häufiger = höhere Zahl) */
+    resourceTiles: Readonly<Record<string, number>>;
     resourceDensity: number;
     specials: readonly SpecialTilePlacement[];
   };
   enemies: Record<EnemyRole, readonly string[]>;
   /** Sondereffekt, der die ganze Nacht gilt */
   globalEffect: { name: string; text: string; modifiers: readonly Modifier[] };
-  reward: { resource: ResourceId; base: number; perNight: number; perResourceTile: number };
 }
 
 const URZEIT: RiftDef = {
   id: 'urzeit',
   name: 'Rift der Urzeit',
   shortName: 'Urzeit',
-  description: 'Dichter Urwald, Teergruben und hungrige Dinosaurier. Viele Bäume bringen viel Holz.',
+  description: 'Dichter Urwald, Teergruben und hungrige Dinosaurier. Bäume, Felsen und Riesenfarne lassen sich abbauen.',
   color: 0x9be15d,
   tiles: {
     ground: { id: 'ground', name: 'Urwiese', buildable: true, path: false, color: 0x2f4f2a, deco: 'none' },
     path: { id: 'path', name: 'Trampelpfad', buildable: false, path: true, color: 0x6b5236, deco: 'none' },
-    tree: { id: 'tree', name: 'Urzeitbaum', buildable: false, path: false, color: 0x2a4626, deco: 'tree', resource: true },
-    fern: { id: 'fern', name: 'Riesenfarn', buildable: false, path: false, color: 0x2a4626, deco: 'fern' },
-    rock: { id: 'rock', name: 'Felsen', buildable: false, path: false, color: 0x2f4f2a, deco: 'rock' },
+    tree: { id: 'tree', name: 'Urzeitbaum', buildable: false, path: false, color: 0x2a4626, deco: 'tree', harvest: { holz: 8 } },
+    fern: { id: 'fern', name: 'Riesenfarn', buildable: false, path: false, color: 0x2a4626, deco: 'fern', harvest: { nahrung: 6 } },
+    rock: { id: 'rock', name: 'Felsen', buildable: false, path: false, color: 0x2f4f2a, deco: 'rock', harvest: { stein: 6 } },
+    amber: { id: 'amber', name: 'Bernstein', buildable: false, path: false, color: 0x2f4f2a, deco: 'amber', harvest: { magie: 3, gold: 2 } },
     hill: {
       id: 'hill', name: 'Hügel', buildable: true, path: false, color: 0x4a6b35, deco: 'hill',
       towerModifiers: [{ stat: 'range', kind: 'pct', value: 0.2 }],
@@ -87,10 +89,10 @@ const URZEIT: RiftDef = {
     },
   },
   generation: {
-    blockedTiles: ['fern', 'rock'],
-    blockedDensity: 0.07,
-    resourceTile: 'tree',
-    resourceDensity: 0.16,
+    blockedTiles: [],
+    blockedDensity: 0,
+    resourceTiles: { tree: 5, rock: 3, fern: 3, amber: 1 },
+    resourceDensity: 0.2,
     specials: [
       { tile: 'hill', on: 'build', count: [3, 5] },
       { tile: 'swamp', on: 'build', count: [2, 3] },
@@ -113,7 +115,6 @@ const URZEIT: RiftDef = {
       { stat: 'enemyHp', kind: 'pct', value: -0.15 },
     ],
   },
-  reward: { resource: 'holz', base: 40, perNight: 6, perResourceTile: 3 },
 };
 
 const TECH: RiftDef = {
@@ -125,9 +126,10 @@ const TECH: RiftDef = {
   tiles: {
     ground: { id: 'ground', name: 'Metallboden', buildable: true, path: false, color: 0x252c37, deco: 'none' },
     path: { id: 'path', name: 'Wartungsweg', buildable: false, path: true, color: 0x5f6672, deco: 'none' },
-    scrap: { id: 'scrap', name: 'Schrotthaufen', buildable: false, path: false, color: 0x2b3440, deco: 'scrap', resource: true },
+    scrap: { id: 'scrap', name: 'Schrotthaufen', buildable: false, path: false, color: 0x252c37, deco: 'scrap', harvest: { stein: 5, gold: 2 } },
     pipes: { id: 'pipes', name: 'Rohre', buildable: false, path: false, color: 0x262e38, deco: 'pipes' },
-    crate: { id: 'crate', name: 'Kiste', buildable: false, path: false, color: 0x2b3440, deco: 'crate' },
+    crate: { id: 'crate', name: 'Vorratskiste', buildable: false, path: false, color: 0x252c37, deco: 'crate', harvest: { holz: 6, nahrung: 4 } },
+    cell: { id: 'cell', name: 'Energiezelle', buildable: false, path: false, color: 0x252c37, deco: 'cell', harvest: { magie: 4 } },
     energy: {
       id: 'energy', name: 'Energiefeld', buildable: true, path: false, color: 0x1f3a4a, deco: 'energy',
       towerModifiers: [{ stat: 'attackSpeed', kind: 'pct', value: 0.25 }],
@@ -145,10 +147,10 @@ const TECH: RiftDef = {
     },
   },
   generation: {
-    blockedTiles: ['pipes', 'crate'],
-    blockedDensity: 0.08,
-    resourceTile: 'scrap',
-    resourceDensity: 0.12,
+    blockedTiles: ['pipes'],
+    blockedDensity: 0.05,
+    resourceTiles: { scrap: 4, crate: 3, cell: 2 },
+    resourceDensity: 0.16,
     specials: [
       { tile: 'energy', on: 'build', count: [3, 4] },
       { tile: 'jammer', on: 'build', count: [2, 3] },
@@ -168,7 +170,6 @@ const TECH: RiftDef = {
     text: 'Alle Gegner haben +10 % Rüstung. Magie-Türme ignorieren Rüstung.',
     modifiers: [{ stat: 'enemyArmor', kind: 'flat', value: 0.1 }],
   },
-  reward: { resource: 'metall', base: 30, perNight: 5, perResourceTile: 3 },
 };
 
 const WELTRAUM: RiftDef = {
@@ -180,9 +181,10 @@ const WELTRAUM: RiftDef = {
   tiles: {
     ground: { id: 'ground', name: 'Mondgestein', buildable: true, path: false, color: 0x2a2742, deco: 'none' },
     path: { id: 'path', name: 'Kraterpfad', buildable: false, path: true, color: 0x55506e, deco: 'none' },
-    crystal: { id: 'crystal', name: 'Kristallader', buildable: false, path: false, color: 0x2a2742, deco: 'crystal', resource: true },
+    crystal: { id: 'crystal', name: 'Kristallader', buildable: false, path: false, color: 0x2a2742, deco: 'crystal', harvest: { magie: 5 } },
     crater: { id: 'crater', name: 'Krater', buildable: false, path: false, color: 0x2a2742, deco: 'crater' },
-    meteor: { id: 'meteor', name: 'Meteorit', buildable: false, path: false, color: 0x2a2742, deco: 'meteor' },
+    meteor: { id: 'meteor', name: 'Meteorit', buildable: false, path: false, color: 0x2a2742, deco: 'meteor', harvest: { stein: 6, gold: 2 } },
+    vines: { id: 'vines', name: 'Alien-Ranken', buildable: false, path: false, color: 0x2a2742, deco: 'vines', harvest: { holz: 5, nahrung: 4 } },
     crystalfield: {
       id: 'crystalfield', name: 'Kristallfeld', buildable: true, path: false, color: 0x33305a, deco: 'crystalfield',
       towerModifiers: [{ stat: 'damage', kind: 'pct', value: 0.3 }],
@@ -200,10 +202,10 @@ const WELTRAUM: RiftDef = {
     },
   },
   generation: {
-    blockedTiles: ['crater', 'meteor'],
-    blockedDensity: 0.08,
-    resourceTile: 'crystal',
-    resourceDensity: 0.1,
+    blockedTiles: ['crater'],
+    blockedDensity: 0.05,
+    resourceTiles: { meteor: 3, crystal: 2, vines: 3 },
+    resourceDensity: 0.16,
     specials: [
       { tile: 'crystalfield', on: 'build', count: [2, 3] },
       { tile: 'stardust', on: 'build', count: [3, 4] },
@@ -226,7 +228,6 @@ const WELTRAUM: RiftDef = {
       { stat: 'enemySpeed', kind: 'pct', value: 0.1 },
     ],
   },
-  reward: { resource: 'kristall', base: 20, perNight: 4, perResourceTile: 2 },
 };
 
 export const RIFTS: readonly RiftDef[] = [URZEIT, TECH, WELTRAUM];

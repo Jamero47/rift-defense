@@ -122,8 +122,8 @@ function placeObstacles(rift: RiftDef, tiles: string[][], rng: Rng): void {
     const factor = nearPath(tiles, c, rift) ? 0.35 : 1;
     const roll = rng.next();
     if (roll < gen.resourceDensity * factor) {
-      tiles[c.row][c.col] = gen.resourceTile;
-    } else if (roll < (gen.resourceDensity + gen.blockedDensity) * factor) {
+      tiles[c.row][c.col] = rng.weighted(gen.resourceTiles as Record<string, number>);
+    } else if (gen.blockedTiles.length > 0 && roll < (gen.resourceDensity + gen.blockedDensity) * factor) {
       tiles[c.row][c.col] = rng.pick(gen.blockedTiles);
     }
   }
@@ -157,9 +157,9 @@ function shuffled<T>(list: T[], rng: Rng): T[] {
   return rng.shuffle([...list]);
 }
 
-/** Wie viele Ressourcen-Felder (z. B. Bäume) liegen auf der Karte? */
+/** Wie viele abbaubare Rohstoff-Felder liegen auf der Karte? */
 export function countResourceTiles(map: MapData, rift: RiftDef): number {
   let n = 0;
-  for (const row of map.tiles) for (const id of row) if (rift.tiles[id]?.resource) n++;
+  for (const row of map.tiles) for (const id of row) if (rift.tiles[id]?.harvest) n++;
   return n;
 }

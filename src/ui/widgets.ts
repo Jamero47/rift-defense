@@ -174,6 +174,11 @@ export class Button extends Phaser.GameObjects.Container {
     return this.enabled;
   }
 
+  /** Beschriftung (für Tests) */
+  get labelText(): string {
+    return this.label.text;
+  }
+
   setHighlighted(on: boolean): this {
     this.highlighted = on;
     this.redraw();

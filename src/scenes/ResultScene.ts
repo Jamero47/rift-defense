@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config';
 import type { RewardBreakdown } from '../core/progression';
 import { RESOURCE_IDS } from '../core/types';
+import { getBuilding } from '../data/buildings';
 import { getRift } from '../data/rifts';
 import { RESOURCES } from '../data/resources';
 import { Button, COLORS, addText, drawPanel } from '../ui/widgets';
@@ -15,6 +16,10 @@ export interface ResultData {
   totalWaves: number;
   kills: number;
   rewards: RewardBreakdown;
+  /** Text einer abgeschlossenen Story-Nacht */
+  storyText?: string;
+  /** Neu freigeschaltetes Gebäude (Story-Belohnung) */
+  unlockedBuilding?: string;
 }
 
 /** Ergebnis einer Nacht mit allen Belohnungen. */
@@ -36,11 +41,17 @@ export class ResultScene extends Phaser.Scene {
       origin: [0.5, 0.5], color: COLORS.muted, stroke: true,
     });
 
-    const w = 640;
+    const w = 680;
     const lines = data.rewards.lines;
-    const h = 90 + Math.max(1, lines.length) * 40 + 60;
+    const rowH = lines.length > 6 ? 30 : 38;
+    let y = 196;
+    if (data.storyText) {
+      const unlock = data.unlockedBuilding ? `\nNeu freigeschaltet: ${getBuilding(data.unlockedBuilding).name}` : '';
+      const story = addText(this, GAME_WIDTH / 2, y, data.storyText + unlock, 19, { origin: [0.5, 0], align: 'center', wrap: w, color: COLORS.good, stroke: true });
+      y += story.height + 12;
+    }
+    const h = 90 + Math.max(1, lines.length) * rowH + 50;
     const x = GAME_WIDTH / 2 - w / 2;
-    const y = 200;
     const g = this.add.graphics();
     drawPanel(g, x, y, w, h);
     addText(this, x + 24, y + 18, 'Belohnungen für die Stadt', 24, { color: COLORS.gold });
@@ -49,14 +60,14 @@ export class ResultScene extends Phaser.Scene {
     for (const line of lines) {
       addText(this, x + 24, ly, line.label, 19, { origin: [0, 0.5], bold: false });
       this.resourceRow(x + w - 24, ly, line.resources);
-      ly += 40;
+      ly += rowH;
     }
     g.lineStyle(2, 0x5b4a2e, 1);
     g.lineBetween(x + 20, ly - 12, x + w - 20, ly - 12);
     addText(this, x + 24, ly + 14, 'Gesamt', 22, { origin: [0, 0.5] });
     this.resourceRow(x + w - 24, ly + 14, data.rewards.total);
 
-    const by = Math.min(660, y + h + 60);
+    const by = Math.min(675, y + h + 50);
     if (data.victory) {
       new Button(this, GAME_WIDTH / 2, by, 340, 70, 'Zur Stadt', () => this.scene.start('City'), { fontSize: 28 });
     } else {

@@ -1,11 +1,35 @@
 // Gemeinsame Typen für Spieldaten und Logik.
 
-export type ResourceId = 'holz' | 'metall' | 'kristall';
+/**
+ * Dauerhafte Ressourcen für die Stadt (Tag-Sphäre).
+ * Im Kampf (Nacht-Sphäre) bezahlt man dagegen mit Rift-Kristallen – die verfallen nach der Nacht.
+ */
+export type ResourceId = 'gold' | 'holz' | 'stein' | 'magie' | 'nahrung';
 export type Resources = Record<ResourceId, number>;
-export const RESOURCE_IDS: readonly ResourceId[] = ['holz', 'metall', 'kristall'];
+export const RESOURCE_IDS: readonly ResourceId[] = ['gold', 'holz', 'stein', 'magie', 'nahrung'];
 
 export function emptyResources(): Resources {
-  return { holz: 0, metall: 0, kristall: 0 };
+  return { gold: 0, holz: 0, stein: 0, magie: 0, nahrung: 0 };
+}
+
+/** Teilmenge → vollständige Ressourcen (fehlende = 0). */
+export function toResources(part: Partial<Resources> | undefined, factor = 1): Resources {
+  const r = emptyResources();
+  for (const id of RESOURCE_IDS) r[id] = Math.round((part?.[id] ?? 0) * factor);
+  return r;
+}
+
+export function addResources(target: Resources, add: Partial<Resources>, factor = 1): Resources {
+  for (const id of RESOURCE_IDS) target[id] += Math.round((add[id] ?? 0) * factor);
+  return target;
+}
+
+export function hasResources(have: Resources, cost: Partial<Resources>): boolean {
+  return RESOURCE_IDS.every((id) => have[id] >= (cost[id] ?? 0));
+}
+
+export function isEmptyResources(r: Partial<Resources>): boolean {
+  return RESOURCE_IDS.every((id) => !r[id]);
 }
 
 export type TowerTag = 'projectile' | 'magic' | 'bow' | 'cannon' | 'mage' | 'frost' | 'antiair';
@@ -25,11 +49,18 @@ export type StatKey =
   | 'airDamage'
   | 'projectileSpeed'
   | 'towerCost'
-  // Wirtschaft & Tor
-  | 'goldGain'
-  | 'startGold'
+  | 'towerLimit'
+  | 'towerMaxLevel'
+  // Wirtschaft & Tor (im Kampf)
+  | 'crystalGain'
+  | 'startCrystals'
   | 'gateMaxHp'
   | 'interest'
+  // Beute für die Stadt
+  | 'goldDropChance'
+  | 'lootGain'
+  | 'harvestYield'
+  | 'autoHarvest'
   // Gegner
   | 'enemyHp'
   | 'enemySpeed'
@@ -41,6 +72,8 @@ export type StatKey =
   | 'kingRange'
   | 'kingAbilityDamage'
   | 'kingAbilityCooldown'
+  | 'kingMoveSpeed'
+  | 'kingHarvestSpeed'
   // Karten
   | 'cardLuck'
   | 'cardRerolls';

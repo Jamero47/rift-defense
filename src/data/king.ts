@@ -1,5 +1,6 @@
 // Der König steht vor dem Tor – die letzte Verteidigungslinie.
-// Im Kampf kann man ihn mit Gold verbessern, dauerhaft über den Thronsaal (buildings.ts).
+// Im Kampf kann man ihn mit Rift-Kristallen verbessern, dauerhaft über den Thronsaal (buildings.ts).
+// Man kann ihn außerdem zu Rohstoff-Feldern schicken – dann fehlt er am Tor.
 
 export const KING = {
   name: 'König Aldric',
@@ -8,7 +9,7 @@ export const KING = {
   attackSpeed: 1.1,
   /** Reichweite in Feldern, gemessen vom König */
   range: 2.4,
-  /** Gold-Kosten für Stufe 2, 3, 4, 5 */
+  /** Kosten in Rift-Kristallen für Stufe 2, 3, 4, 5 */
   upgradeCosts: [90, 140, 210, 300] as readonly number[],
   /** Zuwachs pro Stufe */
   perLevel: { damage: 0.3, attackSpeed: 0.1, range: 0.15 },

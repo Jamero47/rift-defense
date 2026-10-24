@@ -2,8 +2,8 @@
 
 ## Idee in einem Satz
 
-Ein Tower-Defense-Roguelite: Jede Nacht verwandelt ein Rift das Land vor dem Stadttor, man baut seine
-Verteidigung neu, wählt Upgrade-Karten – und baut mit der Beute dauerhaft seine Stadt aus.
+Ein Tower-Defense-Roguelite: Am **Tag** baut man seine Stadt aus, in der **Nacht** verwandelt ein Rift das Land
+vor dem Tor – man beschwört Türme, sammelt Beute und Rohstoffe und hält das Tor.
 
 ## Lore
 
@@ -12,29 +12,92 @@ Jede Nacht reißt vor den Toren ein Rift auf – ein Riss zu einer anderen Welt.
 verwandelt sich in diese Welt, und ihre Kreaturen stürmen auf das Tor zu. Der König steht selbst vor dem Tor –
 als letzte Verteidigungslinie.
 
-## Spielablauf
+## Zwei Sphären
 
 ```
-Menü → Stadt (Gebäude ausbauen, Rift der nächsten Nacht ansehen) → Nacht (Kampf) → Ergebnis → Stadt → …
+Menü → Tag-Sphäre (Stadt) → Nacht-Sphäre (Kampf) → Ergebnis → Tag-Sphäre → …
 ```
 
-### Eine Nacht
+| | Tag-Sphäre (Stadt) | Nacht-Sphäre (Kampf) |
+|---|---|---|
+| Ziel | Stadt dauerhaft ausbauen | Tor verteidigen, Beute sammeln |
+| Währung | Gold, Holz, Stein, Magiekristalle, Nahrung | **Rift-Kristalle** (verfallen nach der Nacht) |
+| Woher | Beute aus der Nacht, Produktionsgebäude | Gegner lassen sie fallen, Wellen-Bonus |
 
-1. Ein Rift öffnet sich (Nacht 1–3: Urzeit, Tech, Weltraum; danach zufällig, nie zweimal derselbe hintereinander).
-2. Eine neue Karte entsteht: Weg(e) vom Rift (rechts) zum Tor (links), Hindernisse, Ressourcen-Felder, Sonderfelder.
-3. Man startet mit Gold (200 + 30 pro Nacht + Schatzkammer) und baut Türme.
-4. Man startet jede Welle selbst. Gegner geben Gold, jede geschaffte Welle gibt Bonus-Gold.
-5. **Nach jeder 3. Welle**: 1 von 3 Upgrade-Karten wählen (gilt für den Rest der Nacht).
-6. Letzte Welle = Boss-Welle.
-7. **Sieg** → volle Belohnung, nächste Nacht wird freigeschaltet.
-   **Niederlage** (Tor auf 0) → Werbung ansehen (letzte Welle wiederholen + 100 Gold, 1× pro Nacht)
-   oder aufgeben (Teilbelohnung, Nacht muss erneut gespielt werden – auf derselben Karte).
+## Tag-Sphäre: die Stadt
 
-### Dauerhafter Fortschritt
+Eigene Karte: Die Stadt lehnt sich an einen **Berg** und ist von einer **Stadtmauer** umgeben.
 
-- Nächte bauen aufeinander auf (Nacht 1, 2, 3 …), die Schwierigkeit steigt.
-- Ressourcen (Holz, Metall, Kristall) aus den Rifts → Gebäude in der Stadt → wirken in jeder Nacht.
-- Upgrade-Karten gelten nur für eine Nacht (umstellbar: `BALANCE.cardsPersistAcrossNights`).
+| Bauplatz | Anzahl | Für | Freischaltung |
+|---|---|---|---|
+| Platz des Thronsaals | 1 | Thronsaal | von Anfang an |
+| Stadtplätze | 6 | große Gebäude | 1 frei, Rest über Thronsaal-Stufe oder Gold |
+| Bergbauplatz | 1 | Steinbruch | von Anfang an |
+| Felder vor dem Tor | 3 | Bauernhof, Holzfäller | 1 frei, Rest über Gold / Thronsaal-Stufe |
+| Mauerplätze (klein) | 6 | Wachtürme | über Thronsaal-Stufe oder Gold |
+
+Zu Beginn sind **4 Bauplätze** frei und **4 Gebäude** verfügbar: Thronsaal, Bogenmacher, Steinbruch, Bauernhof.
+
+- **Bauen und Ausbauen dauert** (Platzhalter: 5 Sekunden, `CITY.buildSeconds`). Es läuft immer nur ein Bauauftrag;
+  die Zeit läuft auch weiter, wenn das Spiel geschlossen ist.
+- **Upgrades in den Gebäuden** werden mit Ressourcen gekauft und wirken sofort.
+  Höhere Ränge brauchen eine höhere **Gebäudestufe**.
+- **Neue Gebäude** kommen über **Forschung** (Universität) oder **Story-Nächte** dazu.
+  Die Universität selbst wird mit Thronsaal Stufe 2 frei.
+
+### Tutorial
+
+1. Thronsaal bauen (vorher geht nichts anderes).
+2. Bogenmacher bauen → schaltet Bogenturm und Ballista frei (ohne Türme startet keine Nacht).
+3. Erste Nacht – dort erklärt ein Tutorial Türme, Wellen, König und Karten.
+
+### Gebäude
+
+| Gebäude | Platz | Freischaltung | Wirkung | Upgrades (Auswahl) |
+|---|---|---|---|---|
+| Thronsaal | Thron | Start | Tor-Leben, neue Bauplätze, Universität | Königliche Klinge, Pfeilhagel-Training, Königsstiefel, Fleißige Hände, Eisenbeschlagenes Tor, Kriegskasse |
+| Bogenmacher | Stadt | Start | **Bogenturm + Ballista** | Mehr Bogentürme/Ballisten, Verstärkte Türme (höhere Stufen), Scharfe Pfeile, Schwere Bolzen |
+| Steinbruch | Berg | Start | Stein nach jedem Kampf | Bessere Spitzhacken, Goldader |
+| Bauernhof | Feld | Start | Nahrung nach jedem Kampf | Reiche Ernte, Gute Verpflegung (Angriffstempo) |
+| Universität | Stadt | Thronsaal 2 | Forschung | – |
+| Holzfäller | Feld | Forschung | Holz; **Sammler-Trupp** baut im Kampf automatisch ab | Sammler-Trupp, Scharfe Äxte |
+| Kanonengießerei | Stadt | Forschung | **Kanonenturm** | Mehr Kanonen, Verstärkte Kanonen, Schwarzpulver, Große Kugeln |
+| Magierakademie | Stadt | **Story Nacht 10** | **Magier- + Frostturm** | Mehr Magier/Frost, Höhere Magie, Arkanes Wissen |
+| Wachturm | Mauer | Forschung | Tor-Leben | Späher (Gold-Beute) |
+| Schatzkammer | Stadt | Forschung | Start-Rift-Kristalle, Gold-Beute | Steuern |
+| Orakel | Stadt | Forschung | bessere Upgrade-Karten, Neuwürfe | – |
+
+### Story-Nächte
+
+Besondere Nächte mit festem Rift und Belohnung (`src/data/story.ts`).
+Beispiel: **Nacht 10 – „Der entführte Hofmagier“** (Tech-Rift): Roboter haben den Hofmagier entführt.
+Belohnung: Die **Magierakademie** wird freigeschaltet.
+
+## Nacht-Sphäre: der Kampf
+
+1. Ein Rift öffnet sich (Nacht 1–3: Urzeit, Tech, Weltraum; danach zufällig, Story-Nächte fest).
+2. Eine neue Karte entsteht: Weg(e), Sonderfelder, **Rohstoff-Felder** (Bäume, Felsen, Kristalle …).
+3. Man startet mit Rift-Kristallen (200 + 30 pro Nacht + Stadt-Boni) und **beschwört Türme**.
+   - Nur Türme, die die Stadt freigeschaltet hat.
+   - **Limit pro Turmart** (z. B. 2 Bogentürme) und **maximale Turmstufe** – beides steigt durch Gebäude-Upgrades.
+4. Jede Welle startet man selbst. Nach jeder 3. Welle: 1 von 3 **Upgrade-Karten** (gilt für diese Nacht).
+5. Letzte Welle = Boss-Welle.
+
+### Beute
+
+- Jeder Gegner lässt **Rift-Kristalle** fallen. Sie fliegen nach kurzer Zeit von selbst in die Leiste.
+- Mit etwas Glück fällt **Gold** (Chance 15 %, mehr über Wachturm/Schatzkammer).
+- Spezialgegner und Bosse lassen **Ressourcen** fallen (z. B. Hacker: Magiekristalle und Gold).
+- **Rohstoff-Felder** auf der Karte muss man abbauen: Feld antippen → **König schicken**.
+  Der König läuft hin, baut ab (3 s) und kehrt zurück – **in der Zeit fehlt er am Tor**.
+  Danach ist das Feld freies Bauland. Später übernehmen **Sammler-Trupps** (Holzfäller) das während der Wellen.
+- Alle Rifts bringen alle Ressourcen, nur die Mengen unterscheiden sich.
+
+### Ende der Nacht
+
+- **Sieg:** ganze Beute + Siegprämie (Gold) + Produktion der Stadt. Nächste Nacht wird frei.
+- **Niederlage** (Tor auf 0): Werbung ansehen → letzte Welle wiederholen + 100 Rift-Kristalle (1× pro Nacht),
+  oder aufgeben → 50 % der Beute + Produktion der Stadt; die Nacht muss wiederholt werden (gleiche Karte).
 
 ## Schwierigkeit
 
@@ -45,54 +108,41 @@ Menü → Stadt (Gebäude ausbauen, Rift der nächsten Nacht ansehen) → Nacht 
 | Gegner-Leben | × (1 + 0,1 × (Welle − 1)) × (1 + 0,16 × (Nacht − 1)) |
 | Fluggegner | in jeder 3. Welle, ab Nacht 4 öfter |
 | Zwei Wege | ab Nacht 4 möglich (50 %), ab Nacht 7 immer |
-| Erste Wellen | Welle 1 nur normale Gegner, Panzer ab Welle 3–4, Spezialgegner ab Welle 3 |
 
 ## Türme
 
-| Turm | Kosten | Ziele | Besonderheit |
-|---|---|---|---|
-| Bogenturm | 70 | Boden + Luft | schnell, günstig |
-| Kanonenturm | 110 | Boden | Flächenschaden |
-| Magierturm | 120 | Boden | Kettenblitz, ignoriert Rüstung |
-| Frostturm | 90 | Boden | verlangsamt (Bosse nur halb), ignoriert Rüstung |
-| Ballista | 100 | **nur Luft** | großer Schaden, große Reichweite |
-| König | – | Boden + Luft | steht am Tor, im Kampf verbesserbar, Fähigkeit **Pfeilhagel** (Zielgebiet antippen) |
-
-Jeder Turm hat 3 Stufen. Verkaufen gibt 60 % zurück. Zielwahl: Vorderster / Stärkster / Nächster.
-Physischer Schaden wird durch Rüstung verringert, magischer nicht.
+| Turm | Kosten | Ziele | Besonderheit | Freigeschaltet durch |
+|---|---|---|---|---|
+| Bogenturm | 70 | Boden + Luft | schnell, günstig | Bogenmacher |
+| Ballista | 100 | **nur Luft** | großer Schaden, große Reichweite | Bogenmacher |
+| Kanonenturm | 110 | Boden | Flächenschaden | Kanonengießerei |
+| Magierturm | 120 | Boden | Kettenblitz, ignoriert Rüstung | Magierakademie |
+| Frostturm | 90 | Boden | verlangsamt, ignoriert Rüstung | Magierakademie |
+| König | – | Boden + Luft | am Tor, im Kampf verbesserbar, **Pfeilhagel**, baut Rohstoffe ab | – |
 
 ## Rifts
 
-| Rift | Ressource | Sondereffekt | Sonderfelder | Gegner (Spezial / Boss) |
+| Rift | Sondereffekt | Sonderfelder | Rohstoff-Felder | Spezial / Boss |
 |---|---|---|---|---|
-| Urzeit | Holz (Bäume) | Herdentiere: +25 % Gegner, −15 % Leben | Hügel +20 % Reichweite, Sumpf −15 % Tempo, Teergrube (Weg) Gegner −40 % | Parasaurolophus (Brüllen: Gegner schneller) / T-Rex |
-| Tech | Metall (Schrott) | Roboter-Panzerung: +10 % Rüstung | Energiefeld +25 % Tempo, Störsender −20 % Schaden, Förderband (Weg) Gegner +35 % | **Hacker** (legt Türme lahm) / Mech-Titan (EMP) |
-| Weltraum | Kristall | Niedrige Schwerkraft: Projektile +30 %, Gegner +10 % | Kristallfeld +30 % Schaden, Sternenstaub −20 % Reichweite, Schwerkraftfeld (Weg) Gegner −30 % | Brüter (platzt in Krabbler) / Brutkönigin |
+| Urzeit | +25 % Gegner, −15 % Leben | Hügel, Sumpf, Teergrube | Baum, Felsen, Riesenfarn, Bernstein | Parasaurolophus / T-Rex |
+| Tech | +10 % Rüstung | Energiefeld, Störsender, Förderband | Schrott, Vorratskiste, Energiezelle | Hacker / Mech-Titan |
+| Weltraum | Projektile +30 %, Gegner +10 % | Kristallfeld, Sternenstaub, Schwerkraftfeld | Meteorit, Kristallader, Alien-Ranken | Brüter / Brutkönigin |
 
-Jeder Rift hat: normal, schnell, Panzer, Flug, Spezial, Boss. Grüner Rahmen = Bonus-Feld, roter Rahmen = Nachteil.
-
-## Upgrade-Karten (Auswahl)
+## Upgrade-Karten (in der Nacht)
 
 | Seltenheit | Farbe | Chance | Beispiele |
 |---|---|---|---|
-| Gewöhnlich | Grau | 60 % | Bogentürme +15 % Schaden, Sofort +80 Gold, Tor +5 Leben |
-| Selten | Blau | 28 % | Alle Türme +10 % Schaden, Türme 10 % billiger, Kopfgeld +20 % Gold |
-| Episch | Lila | 10 % | Kettenblitz +1 Ziel, Panzerbrecher, Zinsen |
-| Legendär | Orange | 2 % | Alle Projektiltürme +1 Projektil, Zeitverzerrung, Göttlicher Segen |
-
-Glück (Orakel, spätere Karten in der Nacht) verschiebt die Chancen nach oben. Orakel gibt außerdem Neuwürfe.
-
-## Stadt-Gebäude
-
-Holzfäller · Schrottplatz · Kristallschleiferei (liefern nach **jedem** Kampf Ressourcen) ·
-Bogenmacher · Kanonengießerei · Magierakademie · Ballistenwerkstatt (Turm-Boni) ·
-Stadtmauer (Tor-Leben) · Schatzkammer (Startgold) · Thronsaal (König) · Orakel (Karten) · Waffenschmiede (alle Türme).
-Je 3–5 Stufen, Kosten steigen pro Stufe.
+| Gewöhnlich | Grau | 60 % | Bogentürme +15 % Schaden, Sofort +80 Rift-Kristalle, Tor +5 Leben |
+| Selten | Blau | 28 % | Alle Türme +10 % Schaden, Türme 10 % billiger |
+| Episch | Lila | 10 % | Kettenblitz, Panzerbrecher, Zinsen |
+| Legendär | Orange | 2 % | Alle Projektiltürme +1 Projektil, Zeitverzerrung |
 
 ## Offene Design-Fragen
 
-- Sollen Upgrade-Karten doch über mehrere Nächte gelten? (ein Schalter in `config.ts`)
-- Soll man zwischen zwei Rifts wählen können (Risiko vs. Belohnung)?
-- Kann der König sterben / blockiert er Gegner (Nahkampf)?
-- Weitere Rifts: Eiszeit, Unterwelt, Unterwasser, Wilder Westen, Zuckerwelt …?
-- Monetarisierung: nur Belohnungs-Werbung, oder auch kosmetische Käufe?
+- **Balancing** der Nächte zum neuen Freischalt-System: Mit Turm-Limits wird die Stadt wichtiger –
+  die Schwierigkeit späterer Nächte muss beim Testen angepasst werden.
+- Rohstoffe in der Bauphase abbauen ist ohne Risiko. Soll Abbauen nur während der Wellen gehen,
+  oder soll es einen Countdown zwischen den Wellen geben?
+- Wofür überschüssige Rift-Kristalle? (z. B. Nachkauf von Karten, Reparatur des Tors)
+- Bauzeiten: echte Zeiten, Beschleunigen (z. B. per Werbung)?
+- Weitere Story-Nächte und Gebäude (Mine am Berg, Kaserne mit Soldaten, Tempel …)

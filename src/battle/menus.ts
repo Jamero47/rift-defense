@@ -1,14 +1,16 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, MAP_Y, TILE } from '../config';
 import { formatNumber } from '../core/modifiers';
-import type { GridPos } from '../core/types';
+import { RESOURCE_IDS, type GridPos } from '../core/types';
 import { KING, KING_MAX_LEVEL } from '../data/king';
+import { RESOURCES } from '../data/resources';
 import { TOWERS, type TowerDef } from '../data/towers';
 import { Button, COLORS, addText, drawPanel } from '../ui/widgets';
 import { DEPTH, type BattleScene } from './BattleScene';
 import { TARGET_MODE_LABELS, type Tower, type TowerStats } from './entities';
 
-// Menüs auf der Karte: Turm bauen, Turm verbessern/verkaufen, König verbessern.
+// Menüs auf der Karte: Turm beschwören, Turm verbessern/verkaufen, König verbessern, Rohstoffe abbauen.
+// Bezahlt wird im Kampf mit Rift-Kristallen.
 
 const TARGET_ORDER = ['first', 'strong', 'close'] as const;
 
@@ -55,7 +57,8 @@ export class BattleMenus {
     const bh = 112;
     const gap = 8;
     const pad = 12;
-    const w = TOWERS.length * bw + (TOWERS.length - 1) * gap + pad * 2;
+    const towers = TOWERS.filter((t) => s.availableTowers.includes(t.id));
+    const w = Math.max(360, towers.length * bw + (towers.length - 1) * gap + pad * 2);
     const h = 44 + bh + 62;
     const x = clamp(c.x - w / 2, 8, GAME_WIDTH - w - 8);
     let y = c.y - TILE / 2 - h - 6;
@@ -72,8 +75,10 @@ export class BattleMenus {
     let selected: string | null = null;
     const buttons: Button[] = [];
 
-    TOWERS.forEach((def, i) => {
+    towers.forEach((def, i) => {
       const cost = s.towerCost(def.levels[0]);
+      const count = s.towerCount(def);
+      const limit = s.towerLimit(def);
       const bx = pad + i * (bw + gap) + bw / 2;
       const btn = new Button(s, bx, 40 + bh / 2, bw, bh, '', () => {
         if (selected === def.id) {
@@ -83,14 +88,17 @@ export class BattleMenus {
         selected = def.id;
         buttons.forEach((b, j) => b.setHighlighted(j === i));
         const st = s.computeTowerStats(def, 1, tile);
-        info.setText(`${def.name}: ${summary(def, st)}\nNochmal antippen = bauen`).setColor(COLORS.text);
+        const hint = count >= limit ? `Limit erreicht (${count}/${limit}) – mehr im Gebäude ${s.towerSource(def)}` : 'Nochmal antippen = beschwören';
+        info.setText(`${def.name}: ${summary(def, st)}\n${hint}`).setColor(count >= limit ? COLORS.bad : COLORS.text);
         this.drawRange(c.x, c.y, st.range, def.color);
         this.markCell(c.x, c.y);
       }, { color: 0x2a2540 });
       btn.add(s.add.image(0, -22, `top_${def.id}`).setScale(0.85));
       btn.add(addText(s, 0, 18, def.name.replace('turm', ''), 15, { origin: [0.5, 0.5] }));
-      btn.add(addText(s, 0, 40, `${cost}`, 18, { origin: [0.5, 0.5], color: s.gold >= cost ? COLORS.gold : COLORS.bad }));
+      btn.add(s.add.image(-16, 40, 'icon_rift').setScale(0.38));
+      btn.add(addText(s, -4, 40, `${cost}`, 18, { origin: [0, 0.5], color: s.crystals >= cost ? COLORS.text : COLORS.bad }));
       if (def.targets.air) btn.add(s.add.image(bw / 2 - 14, -bh / 2 + 14, 'icon_air').setScale(0.45));
+      btn.add(addText(s, -bw / 2 + 8, -bh / 2 + 6, `${count}/${limit}`, 14, { color: count >= limit ? COLORS.bad : COLORS.muted }));
       root.add(btn);
       buttons.push(btn);
     });
@@ -114,8 +122,9 @@ export class BattleMenus {
     this.drawRange(t.x, t.y, t.stats.range, t.def.color);
 
     const maxLevel = t.def.levels.length;
+    const allowed = s.towerMaxLevel(t.def);
     root.add(addText(s, 16, 12, t.def.name, 24));
-    root.add(addText(s, w - 16, 16, `Stufe ${t.level}/${maxLevel}`, 18, { origin: [1, 0], color: COLORS.gold }));
+    root.add(addText(s, w - 16, 16, `Stufe ${t.level}/${allowed}`, 18, { origin: [1, 0], color: COLORS.gold }));
     let ly = 46;
     if (t.tile.effectText) {
       const good = t.tile.towerModifiers?.every((m) => m.value >= 0);
@@ -131,18 +140,20 @@ export class BattleMenus {
     root.add(addText(s, 16, ly, lines.join('\n'), 17, { bold: false, wrap: w - 32 }));
 
     const by = h - 98;
-    if (next) {
+    if (next && t.level < allowed) {
       const cost = s.towerCost(t.def.levels[t.level]);
       root.add(new Button(s, 92, by, 156, 56, 'Verbessern', () => {
         if (s.upgradeTower(t)) this.openTower(t);
-      }, { subLabel: `${cost} Gold`, fontSize: 19, enabled: s.gold >= cost }));
+      }, { subLabel: `${cost} Kristalle`, fontSize: 19, enabled: s.crystals >= cost }));
+    } else if (next) {
+      root.add(new Button(s, 92, by, 156, 56, 'Gesperrt', () => {}, { enabled: false, fontSize: 19, subLabel: `Upgrade: ${s.towerSource(t.def)}` }));
     } else {
       root.add(new Button(s, 92, by, 156, 56, 'Max. Stufe', () => {}, { enabled: false, fontSize: 19 }));
     }
     root.add(new Button(s, 254, by, 140, 56, 'Verkaufen', () => {
       s.sellTower(t);
       this.close();
-    }, { subLabel: `+${s.sellValue(t)} Gold`, color: COLORS.danger, fontSize: 19 }));
+    }, { subLabel: `+${s.sellValue(t)} Kristalle`, color: COLORS.danger, fontSize: 19 }));
     const modeBtn = new Button(s, w / 2, h - 34, w - 32, 44, `Ziel: ${TARGET_MODE_LABELS[t.targetMode]}`, () => {
       t.targetMode = TARGET_ORDER[(TARGET_ORDER.indexOf(t.targetMode) + 1) % TARGET_ORDER.length];
       modeBtn.setLabel(`Ziel: ${TARGET_MODE_LABELS[t.targetMode]}`);
@@ -155,23 +166,63 @@ export class BattleMenus {
   openKing(): void {
     const s = this.scene;
     const w = 340;
-    const h = 262;
-    const root = this.open(s.kingPos.x + 36, clamp(s.kingPos.y - h / 2, MAP_Y + 4, GAME_HEIGHT - h - 4), w, h);
+    const away = !s.isKingHome() || s.kingMode !== 'home';
+    const h = away ? 324 : 262;
+    const x = s.kingPos.x + 36 + w < GAME_WIDTH ? s.kingPos.x + 36 : s.kingPos.x - 36 - w;
+    const root = this.open(x, clamp(s.kingPos.y - h / 2, MAP_Y + 4, GAME_HEIGHT - h - 4), w, h);
     const k = s.kingStats();
     this.drawRange(s.kingPos.x, s.kingPos.y, k.range, 0xfacc15);
     root.add(addText(s, 16, 12, KING.name, 24));
     root.add(addText(s, w - 16, 16, `Stufe ${s.kingLevel}/${KING_MAX_LEVEL}`, 18, { origin: [1, 0], color: COLORS.gold }));
+    const status = { home: 'Wacht am Tor.', walking: 'Unterwegs zum Rohstoff …', harvesting: 'Baut ab …', returning: 'Kehrt zum Tor zurück …' }[s.kingMode];
     const lines = [
       `Schaden: ${formatNumber(k.damage)} · Tempo: ${formatNumber(k.attackSpeed)}/s`,
-      `Reichweite: ${formatNumber(k.range / TILE)} Felder`,
-      `Trifft Boden- und Fluggegner.`,
+      `Reichweite: ${formatNumber(k.range / TILE)} Felder · Boden + Luft`,
       `${KING.ability.name}: ${formatNumber(k.abilityDamage, 0)} Schaden, alle ${formatNumber(k.abilityCooldown, 0)} s`,
+      status,
     ];
     root.add(addText(s, 16, 48, lines.join('\n'), 17, { bold: false, wrap: w - 32 }));
     const cost = s.kingUpgradeCost();
-    root.add(new Button(s, w / 2, h - 40, w - 32, 58, cost === null ? 'Max. Stufe' : 'König verbessern', () => {
+    root.add(new Button(s, w / 2, 202, w - 32, 58, cost === null ? 'Max. Stufe' : 'König verbessern', () => {
       if (s.upgradeKing()) this.openKing();
-    }, { subLabel: cost === null ? undefined : `${cost} Gold`, enabled: cost !== null && s.gold >= cost, fontSize: 20 }));
+    }, { subLabel: cost === null ? undefined : `${cost} Kristalle`, enabled: cost !== null && s.crystals >= cost, fontSize: 20 }));
+    if (away) {
+      root.add(new Button(s, w / 2, 270, w - 32, 52, 'Zurück zum Tor', () => {
+        s.recallKing();
+        this.close();
+      }, { color: COLORS.buttonAlt, fontSize: 20 }));
+    }
+  }
+
+  // ---------------------------------------------------------------- Rohstoffe abbauen
+
+  openHarvest(cell: GridPos): void {
+    const s = this.scene;
+    const tile = s.tileAt(cell.col, cell.row);
+    if (!tile.harvest) return;
+    const c = s.cellCenter(cell);
+    const w = 300;
+    const h = 176;
+    const x = clamp(c.x - w / 2, 8, GAME_WIDTH - w - 8);
+    let y = c.y - TILE / 2 - h - 6;
+    if (y < MAP_Y + 4) y = c.y + TILE / 2 + 6;
+    const root = this.open(x, y, w, h);
+    this.markCell(c.x, c.y);
+    root.add(addText(s, 16, 12, tile.name, 22));
+    let ix = 16;
+    for (const id of RESOURCE_IDS) {
+      const v = tile.harvest[id];
+      if (!v) continue;
+      root.add(s.add.image(ix + 12, 56, RESOURCES[id].icon).setScale(0.55));
+      const t = addText(s, ix + 28, 56, `+${v}`, 19, { origin: [0, 0.5], color: COLORS.gold });
+      root.add(t);
+      ix += 40 + t.width + 8;
+    }
+    root.add(addText(s, 16, 76, 'Der König verlässt dafür das Tor!', 15, { color: COLORS.muted, bold: false }));
+    const busy = s.kingMode !== 'home';
+    root.add(new Button(s, w / 2, h - 40, w - 32, 56, 'König schicken', () => {
+      s.sendKing(cell);
+    }, { fontSize: 21, subLabel: busy ? 'bricht seinen aktuellen Auftrag ab' : undefined }));
   }
 }
 

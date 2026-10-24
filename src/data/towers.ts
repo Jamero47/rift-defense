@@ -1,6 +1,8 @@
 import type { TowerTag } from '../core/types';
 
 // Alle Turmarten. Neue Türme einfach hier ergänzen (und in textures.ts ein Aussehen geben).
+// Welche Türme im Kampf verfügbar sind, bestimmen die Stadt-Gebäude (buildings.ts → unlocksTowers).
+// Kosten in Rift-Kristallen.
 
 export interface TowerLevel {
   /** Kosten für diese Stufe (Stufe 1 = Baukosten). */
@@ -30,6 +32,10 @@ export interface TowerDef {
   projectile: { style: ProjectileStyle; speed: number };
   /** Hauptfarbe für Grafik und Menüs */
   color: number;
+  /** So viele Türme dieser Art darf man im Kampf bauen (Gebäude-Upgrades erhöhen das). */
+  baseLimit: number;
+  /** Bis zu dieser Stufe kann man den Turm im Kampf verbessern (Gebäude-Upgrades schalten mehr frei). */
+  baseMaxLevel: number;
   levels: readonly TowerLevel[];
 }
 
@@ -46,6 +52,8 @@ export const TOWERS: readonly TowerDef[] = [
     attack: 'projectile',
     projectile: { style: 'arrow', speed: 9 },
     color: 0x5fa844,
+    baseLimit: 2,
+    baseMaxLevel: 1,
     levels: [
       { cost: 70, damage: 9, attackSpeed: 1.25, range: 2.6 },
       { cost: 60, damage: 14, attackSpeed: 1.4, range: 2.8 },
@@ -62,6 +70,8 @@ export const TOWERS: readonly TowerDef[] = [
     attack: 'projectile',
     projectile: { style: 'ball', speed: 6 },
     color: 0x5b5f6b,
+    baseLimit: 1,
+    baseMaxLevel: 1,
     levels: [
       { cost: 110, damage: 22, attackSpeed: 0.55, range: 2.4, splashRadius: 0.9 },
       { cost: 90, damage: 36, attackSpeed: 0.6, range: 2.5, splashRadius: 1.0 },
@@ -78,6 +88,8 @@ export const TOWERS: readonly TowerDef[] = [
     attack: 'chain',
     projectile: { style: 'bolt', speed: 0 },
     color: 0x9b5de5,
+    baseLimit: 1,
+    baseMaxLevel: 1,
     levels: [
       { cost: 120, damage: 15, attackSpeed: 0.8, range: 2.7, chainTargets: 1 },
       { cost: 100, damage: 24, attackSpeed: 0.85, range: 2.8, chainTargets: 2 },
@@ -94,6 +106,8 @@ export const TOWERS: readonly TowerDef[] = [
     attack: 'projectile',
     projectile: { style: 'shard', speed: 8 },
     color: 0x7fd3f7,
+    baseLimit: 1,
+    baseMaxLevel: 1,
     levels: [
       { cost: 90, damage: 4, attackSpeed: 1.0, range: 2.3, slow: { strength: 0.35, duration: 1.5 } },
       { cost: 70, damage: 7, attackSpeed: 1.05, range: 2.5, slow: { strength: 0.45, duration: 1.8 } },
@@ -110,6 +124,8 @@ export const TOWERS: readonly TowerDef[] = [
     attack: 'projectile',
     projectile: { style: 'bolt', speed: 12 },
     color: 0xd9822b,
+    baseLimit: 1,
+    baseMaxLevel: 1,
     levels: [
       { cost: 100, damage: 34, attackSpeed: 0.7, range: 3.6 },
       { cost: 85, damage: 54, attackSpeed: 0.75, range: 3.9 },

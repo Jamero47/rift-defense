@@ -1,14 +1,21 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, HUD_HEIGHT } from '../config';
 import type { WaveDef } from '../core/wavegen';
+import { RESOURCE_IDS } from '../core/types';
 import { getEnemy } from '../data/enemies';
-import { Button, COLORS, addText } from '../ui/widgets';
+import { RESOURCES, RIFT_CRYSTAL } from '../data/resources';
+import { Button, COLORS, addText, drawPanel } from '../ui/widgets';
 import { DEPTH, type BattleScene } from './BattleScene';
 
-// Obere Leiste im Kampf: Nacht, Gold, Tor-Leben, Welle, Vorschau und Knöpfe.
+// Obere Leiste im Kampf: Nacht, Rift-Kristalle, Tor-Leben, Welle, Vorschau und Knöpfe.
+// Links unter der Leiste: gesammelte Beute für die Stadt.
+
+/** Lage der Beute-Anzeige (Ziel für einfliegende Beute) */
+export const LOOT_PANEL = { x: 6, y: 80, w: 112, row: 30 };
 
 export class Hud {
-  private readonly goldText: Phaser.GameObjects.Text;
+  private readonly crystalText: Phaser.GameObjects.Text;
+  private readonly lootTexts: Phaser.GameObjects.Text[] = [];
   private readonly gateText: Phaser.GameObjects.Text;
   private readonly waveText: Phaser.GameObjects.Text;
   private readonly startBtn: Button;
@@ -32,8 +39,19 @@ export class Hud {
     addText(s, 16, 8, `Nacht ${s.setup.night}`, 24).setDepth(d);
     addText(s, 16, 40, s.rift.name, 16, { color: hex(s.rift.color) }).setDepth(d);
 
-    s.add.image(232, 36, 'icon_gold').setDepth(d).setScale(0.8);
-    this.goldText = addText(s, 254, 36, '', 28, { origin: [0, 0.5], color: COLORS.gold }).setDepth(d);
+    s.add.image(232, 36, RIFT_CRYSTAL.icon).setDepth(d).setScale(0.8);
+    this.crystalText = addText(s, 254, 36, '', 28, { origin: [0, 0.5], color: RIFT_CRYSTAL.color }).setDepth(d);
+
+    // Beute-Anzeige
+    const lp = LOOT_PANEL;
+    const pg = s.add.graphics().setDepth(d);
+    drawPanel(pg, lp.x, lp.y, lp.w, 26 + RESOURCE_IDS.length * lp.row, { radius: 10, borderWidth: 2, alpha: 0.88 });
+    addText(s, lp.x + lp.w / 2, lp.y + 13, 'Beute', 14, { origin: [0.5, 0.5], color: COLORS.muted }).setDepth(d);
+    RESOURCE_IDS.forEach((id, i) => {
+      const y = lp.y + 34 + i * lp.row;
+      s.add.image(lp.x + 18, y, RESOURCES[id].icon).setScale(0.5).setDepth(d);
+      this.lootTexts.push(addText(s, lp.x + 36, y, '0', 17, { origin: [0, 0.5] }).setDepth(d));
+    });
     s.add.image(372, 36, 'icon_heart').setDepth(d).setScale(0.75);
     this.gateText = addText(s, 393, 36, '', 24, { origin: [0, 0.5] }).setDepth(d);
     s.add.image(508, 36, 'icon_skull').setDepth(d).setScale(0.65);
@@ -59,10 +77,11 @@ export class Hud {
 
   refresh(): void {
     const s = this.scene;
-    const key = [s.gold, s.gateHp, s.gateMaxHp, s.waveIndex, s.phase, s.speed, Math.ceil(s.abilityCooldown), s.abilityTargeting].join('|');
+    const key = [s.crystals, ...RESOURCE_IDS.map((id) => s.loot[id]), s.gateHp, s.gateMaxHp, s.waveIndex, s.phase, s.speed, Math.ceil(s.abilityCooldown), s.abilityTargeting].join('|');
     if (key === this.last) return;
     this.last = key;
-    this.goldText.setText(String(s.gold));
+    this.crystalText.setText(String(s.crystals));
+    RESOURCE_IDS.forEach((id, i) => this.lootTexts[i].setText(String(s.loot[id])));
     this.gateText.setText(`${s.gateHp}/${s.gateMaxHp}`);
     this.gateText.setColor(s.gateHp <= s.gateMaxHp * 0.3 ? COLORS.bad : COLORS.text);
     this.waveText.setText(`${Math.min(s.waveIndex + (s.phase === 'wave' ? 1 : 0), s.waves.length)}/${s.waves.length}`);

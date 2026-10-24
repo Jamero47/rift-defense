@@ -296,6 +296,35 @@ function drawDeco(ctx: Ctx, def: TileDef, rng: Rng): void {
         ctx.stroke();
       }
       break;
+    case 'amber':
+      ellipse(ctx, c + 3, c + 14, 18, 6, 'rgba(0,0,0,0.3)');
+      poly(ctx, [c - 14, c + 10, c - 8, c - 10, c + 6, c - 14, c + 14, c + 2, c + 6, c + 14], '#d97706', '#78350f');
+      poly(ctx, [c - 6, c - 6, c + 2, c - 10, c + 6, c - 2], 'rgba(254,243,199,0.7)');
+      glow(ctx, c, c, 20, 0xfbbf24, 0.35);
+      break;
+    case 'cell':
+      glow(ctx, c, c, 30, 0x22d3ee, 0.45);
+      ctx.fillStyle = '#334155';
+      roundRect(ctx, c - 12, c - 20, 24, 40, 6);
+      ctx.fill();
+      ctx.fillStyle = '#67e8f9';
+      ctx.fillRect(c - 7, c - 12, 14, 26);
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(c - 5, c - 25, 10, 6);
+      break;
+    case 'vines':
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(c - 20 + i * 12, c + 22);
+        ctx.quadraticCurveTo(c - 30 + i * 18, c - 4, c - 10 + i * 10, c - 22);
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+      for (let i = 0; i < 5; i++) circle(ctx, rng.float(c - 18, c + 18), rng.float(c - 16, c + 16), 4, i % 2 ? '#f0abfc' : '#a3e635');
+      break;
     case 'none':
       break;
   }
@@ -813,6 +842,85 @@ function drawIcons(scene: Phaser.Scene): void {
     ctx.quadraticCurveTo(20, 22, 22, 28);
     ctx.quadraticCurveTo(12, 26, 4, 26);
     ctx.fill();
+  });
+  make(scene, 'icon_stein', S, S, (ctx) => {
+    poly(ctx, [6, 30, 10, 14, 22, 8, 34, 16, 34, 30], '#9ca3af', '#4b5563');
+    poly(ctx, [12, 16, 22, 11, 28, 16, 18, 20], '#d1d5db');
+    ctx.strokeStyle = '#6b7280';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(18, 20);
+    ctx.lineTo(20, 30);
+    ctx.stroke();
+  });
+  make(scene, 'icon_nahrung', S, S, (ctx) => {
+    // Brotlaib
+    ellipse(ctx, 20, 24, 16, 10, '#b45309');
+    ellipse(ctx, 20, 21, 15, 9, '#f59e0b');
+    ctx.strokeStyle = '#92400e';
+    ctx.lineWidth = 2;
+    for (const x of [12, 20, 28]) {
+      ctx.beginPath();
+      ctx.moveTo(x - 3, 16);
+      ctx.lineTo(x + 3, 24);
+      ctx.stroke();
+    }
+  });
+  make(scene, 'icon_rift', S, S, (ctx) => {
+    glow(ctx, 20, 20, 19, 0xe879f9, 0.6);
+    poly(ctx, [20, 2, 30, 14, 26, 36, 14, 36, 10, 14], '#c026d3', '#701a75');
+    poly(ctx, [20, 2, 24, 14, 20, 34, 16, 14], '#f5d0fe');
+  });
+  make(scene, 'icon_pick', S, S, (ctx) => {
+    ctx.save();
+    ctx.translate(20, 20);
+    ctx.rotate(0.7);
+    ctx.fillStyle = '#8b5a2b';
+    ctx.fillRect(-2.5, -6, 5, 24);
+    ctx.strokeStyle = '#9ca3af';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, 4, 16, -Math.PI * 0.85, -Math.PI * 0.15);
+    ctx.stroke();
+    ctx.restore();
+  });
+  make(scene, 'icon_book', S, S, (ctx) => {
+    ctx.fillStyle = '#1e3a8a';
+    roundRect(ctx, 6, 8, 28, 26, 3);
+    ctx.fill();
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(9, 10, 22, 20);
+    ctx.fillStyle = '#1e3a8a';
+    ctx.fillRect(19, 10, 2, 20);
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(25, 6, 4, 12);
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1;
+    for (const y of [14, 18, 22]) {
+      ctx.beginPath();
+      ctx.moveTo(11, y);
+      ctx.lineTo(17, y);
+      ctx.moveTo(23, y);
+      ctx.lineTo(29, y);
+      ctx.stroke();
+    }
+  });
+  make(scene, 'icon_boot', S, S, (ctx) => {
+    poly(ctx, [12, 6, 24, 6, 24, 24, 34, 28, 34, 34, 10, 34], '#7c2d12', '#431407');
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(12, 10, 12, 3);
+  });
+  make(scene, 'icon_lock', S, S, (ctx) => {
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(20, 17, 8, Math.PI, 0);
+    ctx.stroke();
+    ctx.fillStyle = '#94a3b8';
+    roundRect(ctx, 9, 17, 22, 17, 4);
+    ctx.fill();
+    circle(ctx, 20, 25, 3, '#334155');
   });
   make(scene, 'icon_bolt', S, S, (ctx) => {
     glow(ctx, 20, 20, 18, 0x4ade80, 0.5);
