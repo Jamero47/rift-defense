@@ -1,0 +1,14 @@
+{
+  "name": "Rift Defense",
+  "short_name": "Rift Defense",
+  "description": "Tower-Defense-Roguelite: Verteidige deine Stadt gegen die Rifts der Nacht.",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05060d",
+  "theme_color": "#05060d",
+  "lang": "de",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
