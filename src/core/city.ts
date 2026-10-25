@@ -1,9 +1,9 @@
 import { CITY } from '../config';
 import { BUILDINGS, getBuilding, type BuildingDef, type UpgradeDef } from '../data/buildings';
 import { PLOTS, getPlot, type PlotDef } from '../data/city';
-import { RESEARCH, getResearch, type ResearchDef } from '../data/research';
+import { RESEARCH, RESEARCH_TREES, getResearch, type ResearchDef, type ResearchTree } from '../data/research';
 import { STORY_NIGHTS } from '../data/story';
-import { scaleModifiers } from './modifiers';
+import { Modifiers, scaleModifiers } from './modifiers';
 import type { CityState, Job, SaveData } from './save';
 import { RESOURCE_IDS, addResources, emptyResources, hasResources, type Modifier, type Resources } from './types';
 
@@ -106,6 +106,16 @@ export function buildingUnlockText(def: BuildingDef): string {
   }
 }
 
+/** Alle Gebäude, die sich mit diesem gegenseitig ausschließen (in beide Richtungen). */
+export function rivals(def: BuildingDef): BuildingDef[] {
+  return BUILDINGS.filter((b) => b.id !== def.id && (def.excludes?.includes(b.id) || b.excludes?.includes(def.id)));
+}
+
+/** Steht (oder entsteht) schon ein Gebäude, das dieses ausschließt? */
+export function excludedBy(city: CityState, def: BuildingDef): BuildingDef | null {
+  return rivals(def).find((b) => isBuiltOrInProgress(city, b.id)) ?? null;
+}
+
 /** Kosten, um von `level` auf `level + 1` zu kommen (level 0 = bauen). null = schon maximal. */
 export function levelCost(def: BuildingDef, level: number): Partial<Resources> | null {
   return def.levels[level] ?? null;
@@ -125,6 +135,8 @@ export function canBuild(save: SaveData, plotId: string, buildingId: string): Ch
   if (!isBuildingUnlocked(city, def)) return no(`Noch gesperrt: ${buildingUnlockText(def)}`);
   if (def.id !== 'thronsaal' && throneLevel(city) === 0) return no('Baue zuerst den Thronsaal.');
   if (def.unique && isBuiltOrInProgress(city, def.id)) return no('Gibt es schon in deiner Stadt.');
+  const rival = excludedBy(city, def);
+  if (rival) return no(`Entweder-oder: ${rival.name} steht schon. Beides geht nicht.`);
   const busy = jobBusy(city);
   if (!busy.ok) return busy;
   if (!hasResources(save.resources, def.levels[0])) return no('Nicht genug Ressourcen.');
@@ -135,7 +147,8 @@ export function startBuild(save: SaveData, plotId: string, buildingId: string, n
   const check = canBuild(save, plotId, buildingId);
   if (!check.ok) return check;
   spend(save.resources, getBuilding(buildingId).levels[0]);
-  save.city.job = { kind: 'build', plotId, id: buildingId, finishAt: now + CITY.buildSeconds * 1000 };
+  const duration = jobDuration(save.city);
+  save.city.job = { kind: 'build', plotId, id: buildingId, finishAt: now + duration, duration };
   return YES;
 }
 
@@ -156,13 +169,20 @@ export function startUpgradeBuilding(save: SaveData, plotId: string, now: number
   if (!check.ok) return check;
   const state = save.city.plots[plotId];
   spend(save.resources, levelCost(getBuilding(state.building), state.level)!);
-  save.city.job = { kind: 'upgrade', plotId, id: state.building, finishAt: now + CITY.buildSeconds * 1000 };
+  const duration = jobDuration(save.city);
+  save.city.job = { kind: 'upgrade', plotId, id: state.building, finishAt: now + duration, duration };
   return YES;
+}
+
+/** Dauer eines Bau- oder Forschungsauftrags in Millisekunden (Baukunst, Gelehrte … machen schneller). */
+export function jobDuration(city: CityState): number {
+  const pct = new Modifiers(cityModifiers(city)).pct('buildTime');
+  return CITY.buildSeconds * 1000 * Math.max(0.2, 1 + pct);
 }
 
 /** 0 … 1 */
 export function jobProgress(job: Job, now: number): number {
-  const total = CITY.buildSeconds * 1000;
+  const total = job.duration ?? CITY.buildSeconds * 1000;
   return Math.min(1, Math.max(0, 1 - (job.finishAt - now) / total));
 }
 
@@ -183,12 +203,12 @@ export function completeJobs(save: SaveData, now: number): string[] {
     }
     city.job = null;
   }
-  const rj = city.researchJob;
-  if (rj && rj.finishAt <= now) {
+  for (const tree of ['uni', 'magic'] as const) {
+    const rj = researchJob(city, tree);
+    if (!rj || rj.finishAt > now) continue;
     if (!city.research.includes(rj.id)) city.research.push(rj.id);
-    const r = getResearch(rj.id);
-    messages.push(`Forschung abgeschlossen: ${r.name} – ${getBuilding(r.unlocksBuilding).name} freigeschaltet!`);
-    city.researchJob = null;
+    messages.push(`Forschung abgeschlossen: ${researchResultText(getResearch(rj.id))}`);
+    setResearchJob(city, tree, null);
   }
   return messages;
 }
@@ -222,13 +242,33 @@ export function buyUpgrade(save: SaveData, buildingId: string, upgradeId: string
 
 export type ResearchStatus = 'done' | 'running' | 'available' | 'locked';
 
+/** Laufende Forschung eines Baums (jeder Baum hat einen eigenen Forschungsplatz). */
+export function researchJob(city: CityState, tree: ResearchTree): Job | null {
+  return tree === 'magic' ? city.magicJob : city.researchJob;
+}
+
+function setResearchJob(city: CityState, tree: ResearchTree, job: Job | null): void {
+  if (tree === 'magic') city.magicJob = job;
+  else city.researchJob = job;
+}
+
+/** Was bringt die Forschung? (kurzer Text) */
+export function researchResultText(r: ResearchDef): string {
+  if (r.unlocksBuilding) return `${r.name} – ${getBuilding(r.unlocksBuilding).name} freigeschaltet!`;
+  if (r.unlocksTowers?.length) return `${r.name} – neuer Turm freigeschaltet!`;
+  return `${r.name}`;
+}
+
 export function researchStatus(save: SaveData, r: ResearchDef): { status: ResearchStatus; reason?: string } {
   const city = save.city;
   if (city.research.includes(r.id)) return { status: 'done' };
-  if (city.researchJob?.id === r.id) return { status: 'running' };
-  const uni = buildingLevel(city, 'universitaet');
-  if (uni === 0) return { status: 'locked', reason: 'Erst die Universität bauen.' };
-  if (uni < r.requiredLevel) return { status: 'locked', reason: `Braucht Universität Stufe ${r.requiredLevel}.` };
+  if (researchJob(city, r.tree)?.id === r.id) return { status: 'running' };
+  const building = getBuilding(RESEARCH_TREES[r.tree].building);
+  const level = buildingLevel(city, building.id);
+  if (level === 0) return { status: 'locked', reason: `Erst ${building.name} bauen.` };
+  const missing = r.requires.filter((id) => !city.research.includes(id));
+  if (missing.length > 0) return { status: 'locked', reason: `Braucht zuerst: ${missing.map((id) => getResearch(id).name).join(', ')}.` };
+  if (level < r.requiredLevel) return { status: 'locked', reason: `Braucht ${building.name} Stufe ${r.requiredLevel}.` };
   return { status: 'available' };
 }
 
@@ -236,7 +276,7 @@ export function canStartResearch(save: SaveData, researchId: string): Check {
   const r = getResearch(researchId);
   const st = researchStatus(save, r);
   if (st.status !== 'available') return no(st.reason ?? 'Nicht möglich.');
-  if (save.city.researchJob) return no('Es wird bereits geforscht.');
+  if (researchJob(save.city, r.tree)) return no('Hier wird bereits geforscht.');
   if (!hasResources(save.resources, r.cost)) return no('Nicht genug Ressourcen.');
   return YES;
 }
@@ -244,13 +284,15 @@ export function canStartResearch(save: SaveData, researchId: string): Check {
 export function startResearch(save: SaveData, researchId: string, now: number): Check {
   const check = canStartResearch(save, researchId);
   if (!check.ok) return check;
-  spend(save.resources, getResearch(researchId).cost);
-  save.city.researchJob = { kind: 'research', id: researchId, finishAt: now + CITY.buildSeconds * 1000 };
+  const r = getResearch(researchId);
+  spend(save.resources, r.cost);
+  const duration = jobDuration(save.city);
+  setResearchJob(save.city, r.tree, { kind: 'research', id: researchId, finishAt: now + duration, duration });
   return YES;
 }
 
-export function allResearch(): readonly ResearchDef[] {
-  return RESEARCH;
+export function allResearch(tree?: ResearchTree): readonly ResearchDef[] {
+  return tree ? RESEARCH.filter((r) => r.tree === tree) : RESEARCH;
 }
 
 // ---------------------------------------------------------------- Wirkung auf die Nacht
@@ -268,6 +310,9 @@ export function cityModifiers(city: CityState): Modifier[] {
       if (rank > 0 && u.modifiers) out.push(...scaleModifiers(u.modifiers, rank));
     }
   }
+  for (const r of RESEARCH) {
+    if (r.modifiers && city.research.includes(r.id)) out.push(...r.modifiers);
+  }
   return out;
 }
 
@@ -277,7 +322,18 @@ export function unlockedTowers(city: CityState): string[] {
   for (const state of Object.values(city.plots)) {
     for (const t of getBuilding(state.building).unlocksTowers ?? []) out.add(t);
   }
+  for (const r of RESEARCH) {
+    if (city.research.includes(r.id)) for (const t of r.unlocksTowers ?? []) out.add(t);
+  }
   return [...out];
+}
+
+/** Woher kommt dieser Turm? (Gebäude- oder Forschungsname, für Hinweise) */
+export function towerSourceName(towerId: string): string {
+  const b = BUILDINGS.find((d) => d.unlocksTowers?.includes(towerId));
+  if (b) return b.name;
+  const r = RESEARCH.find((d) => d.unlocksTowers?.includes(towerId));
+  return r ? `${RESEARCH_TREES[r.tree].name}: ${r.name}` : 'Stadt';
 }
 
 /** Was die Stadt nach jedem Kampf liefert (Produktionsgebäude und Upgrades). */

@@ -3,7 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { RARITIES, type CardDef } from '../data/cards';
 import type { StatKey, TowerTag } from '../core/types';
 import { shade } from '../game/textures';
-import { Button, COLORS, addText } from './widgets';
+import { Button, COLORS, addText, pin } from './widgets';
 
 // Auswahl von 1 aus 3 Upgrade-Karten. Erst antippen = auswählen, dann bestätigen.
 
@@ -17,11 +17,16 @@ export interface DraftOptions {
 
 const TAG_ICON: Partial<Record<TowerTag, string>> = {
   bow: 'top_bow', cannon: 'top_cannon', mage: 'top_mage', frost: 'top_frost', antiair: 'top_ballista',
+  poison: 'top_poison', catapult: 'top_catapult', bell: 'top_bell', gatherer: 'top_gatherer', mine: 'top_mine',
+  banner: 'top_banner', wind: 'top_wind',
 };
 
 const STAT_ICON: Partial<Record<StatKey, string>> = {
   damage: 'icon_hammer', attackSpeed: 'icon_bolt', range: 'icon_eye', projectiles: 'icon_arrows',
-  crystalGain: 'icon_rift', interest: 'icon_rift', kingDamage: 'icon_crown', kingAbilityCooldown: 'icon_crown',
+  crystalGain: 'icon_rift', interest: 'icon_rift', crystalsPerKill: 'icon_rift', luck: 'icon_clover', rareDropChance: 'icon_clover',
+  goldDropChance: 'icon_gold', manaRegen: 'icon_wand', abilityPower: 'icon_wand', startMana: 'icon_wand', abilityRefund: 'icon_wand',
+  critDamage: 'icon_kristall', gateRegen: 'icon_heart', knockback: 'icon_wind', auraStrength: 'icon_bell', poisonDamage: 'icon_flask',
+  gatherSpeed: 'top_gatherer', gatherers: 'top_gatherer', mineIncome: 'top_mine', magicDamage: 'icon_wand', physDamage: 'icon_hammer', kingDamage: 'icon_crown', kingAbilityCooldown: 'icon_crown',
   enemySpeed: 'icon_skull', airDamage: 'icon_air', splashRadius: 'top_cannon', chainTargets: 'top_mage',
   slowStrength: 'top_frost', armorPen: 'icon_metall', critChance: 'icon_kristall', towerCost: 'icon_wall',
 };
@@ -95,6 +100,7 @@ export function showCardDraft(scene: Phaser.Scene, opts: DraftOptions): void {
       v.setScale(0.8).setAlpha(0);
       scene.tweens.add({ targets: v, scale: 1, alpha: 1, duration: 220, delay: i * 80, ease: 'Back.easeOut' });
     });
+    pin(root);
   };
   render();
 }

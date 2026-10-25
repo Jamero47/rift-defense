@@ -28,7 +28,7 @@ in `screenshots/` ansehen. `smoke` bricht bei JavaScript-Fehlern im Browser ab.
   Neue Inhalte gehören hierher; Anleitung in `docs/INHALTE_ERWEITERN.md`.
 - `src/core/*` – reine Logik ohne Phaser (testbar): `mapgen` (Wege + Felder), `wavegen` (Wellen-Budget),
   `progression` (Rift/Story pro Nacht, Belohnungen), `city` (Tag-Sphäre: Bauplätze, Bauen mit Bauzeit, Upgrades,
-  Forschung, Stadt-Boni, freigeschaltete Türme), `draft` (Karten ziehen), `save` (localStorage, Version 2 + Migration),
+  Entweder-oder-Gebäude, Forschungsbaum + Magiebaum mit je eigenem Job-Platz, Stadt-Boni, freigeschaltete Türme), `draft` (Karten ziehen), `save` (localStorage, Version 3 + Migration),
   `modifiers` (Boni-System), `route` (Laufweg als Linienzug), `rng` (Seed-Zufall).
 - Zwei Sphären: **Tag** = `CityScene` (Stadt, dauerhafte Ressourcen Gold/Holz/Stein/Magie/Nahrung),
   **Nacht** = `BattleScene` (Währung Rift-Kristalle, verfällt). Türme gibt es nur, wenn ein Gebäude sie in
@@ -37,7 +37,8 @@ in `screenshots/` ansehen. `smoke` bricht bei JavaScript-Fehlern im Browser ab.
 - **Boni-System:** Karten, Gebäude, Rift-Effekte und Felder liefern alle `Modifier { stat, kind: 'pct'|'flat', value, towerTags? }`.
   `Modifiers.apply(stat, base, tags)` = (base + flat) × (1 + pct). Neue Effekte möglichst als neuer `StatKey`
   in `core/types.ts` + Label in `core/modifiers.ts` + Auswertung in `BattleScene` umsetzen.
-- `src/battle/BattleScene.ts` – Kampfregeln (Spawns, Bewegung, Zielwahl, Schaden, Fähigkeiten, Sieg/Niederlage,
+- `src/battle/BattleScene.ts` – Kampfregeln (Spawns, Bewegung, Zielwahl, Schaden, Gift/Bann/Rückstoß, Turm-Fähigkeiten
+  in `castTowerAbility()`, Aura, Zivilisten, Glück-Beute, Sieg/Niederlage,
   Snapshot pro Welle für „Werbung: Welle wiederholen“, König läuft zu Rohstoff-Feldern, Sammler).
   `entities.ts` = Gegner/Turm/Projektil, `drops.ts` = einfliegende Beute, `menus.ts` = Bau-/Turm-/Königs-/Abbau-Menü,
   `hud.ts` = obere Leiste, Beute-Anzeige, Pfeilhagel-Knopf.
@@ -47,7 +48,9 @@ in `screenshots/` ansehen. `smoke` bricht bei JavaScript-Fehlern im Browser ab.
 - Grafik: `src/game/textures.ts` zeichnet alles per Canvas-2D beim Start. Textur-Schlüssel:
   `tile_<rift>_<tile>`, `top_<tower>`, `tower_base_<1-3>`, `enemy_<id>`, `proj_<style>`, `portal_<rift>`, `icon_*`, `fx_*`.
   Echte Grafiken später unter denselben Schlüsseln laden.
-- Layout: logisch 1280×720, `Scale.FIT`. Karte 16×9 Felder à 72 px ab (128, 72); links Mauer/Tor/König, oben HUD.
+- Layout: logisch 1280×720, `Scale.FIT`. Kampfkarte 28×13 Felder à 72 px ab (128, 72), größer als der Bildschirm:
+  Kamera mit Grenzen, Verschieben per Ziehen. HUD/Dialoge werden mit `pin()` (ui/widgets) festgeheftet (scrollFactor 0);
+  Menüs auf der Karte liegen in der Welt. Klicks immer über `toWorld()` umrechnen. Tests: `battle.focusCell(cell)`.
 - Debug: `?debug` in der URL → `window.rift` (`go(scene, data)`, `battle()`, `save`, `button(label)` = Knopf-Position).
   Wird von `scripts/smoke.mjs` genutzt (`--full-city` für Tests späterer Nächte mit allen Türmen).
 

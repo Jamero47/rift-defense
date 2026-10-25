@@ -31,19 +31,34 @@ Eigene Karte: Die Stadt lehnt sich an einen **Berg** und ist von einer **Stadtma
 | Bauplatz | Anzahl | Für | Freischaltung |
 |---|---|---|---|
 | Platz des Thronsaals | 1 | Thronsaal | von Anfang an |
-| Stadtplätze | 6 | große Gebäude | 1 frei, Rest über Thronsaal-Stufe oder Gold |
-| Bergbauplatz | 1 | Steinbruch | von Anfang an |
-| Felder vor dem Tor | 3 | Bauernhof, Holzfäller | 1 frei, Rest über Gold / Thronsaal-Stufe |
+| Stadtplätze | 10 | große Gebäude | 1 frei, Rest über Thronsaal-Stufe (2–5) oder Gold |
+| Bergbauplätze | 3 | Steinbruch, Mine | 1 frei, Rest über Thronsaal 3 oder Gold |
+| Felder vor dem Tor | 6 | Bauernhof, Holzfäller, Fischerhütte | 1 frei, Rest über Gold / Thronsaal-Stufe |
 | Mauerplätze (klein) | 6 | Wachtürme | über Thronsaal-Stufe oder Gold |
+
+Insgesamt **26 Bauplätze**. Es gibt **14 Stadtgebäude, aber nur 10 Stadtplätze** – man muss sich entscheiden.
 
 Zu Beginn sind **4 Bauplätze** frei und **4 Gebäude** verfügbar: Thronsaal, Bogenmacher, Steinbruch, Bauernhof.
 
 - **Bauen und Ausbauen dauert** (Platzhalter: 5 Sekunden, `CITY.buildSeconds`). Es läuft immer nur ein Bauauftrag;
-  die Zeit läuft auch weiter, wenn das Spiel geschlossen ist.
+  die Zeit läuft auch weiter, wenn das Spiel geschlossen ist. „Baukunst“ (Forschung) und „Gelehrte“ (Universität) machen schneller.
 - **Upgrades in den Gebäuden** werden mit Ressourcen gekauft und wirken sofort.
   Höhere Ränge brauchen eine höhere **Gebäudestufe**.
-- **Neue Gebäude** kommen über **Forschung** (Universität) oder **Story-Nächte** dazu.
+- **Neue Gebäude** kommen über den **Forschungsbaum** (Universität) oder **Story-Nächte** dazu.
   Die Universität selbst wird mit Thronsaal Stufe 2 frei.
+
+### Entweder-oder: Spielstil wählen
+
+Manche Gebäude schließen sich gegenseitig aus. Steht das eine, kann man das andere nicht bauen
+(Feld `excludes` in `src/data/buildings.ts`, wirkt in beide Richtungen):
+
+| Entweder | oder | Spielstil |
+|---|---|---|
+| Kanonengießerei (Kanonenturm) | Belagerungswerkstatt (Katapult) | kurze, schnelle Explosionen ↔ riesige Reichweite auf Gruppen |
+| Alchemistenhütte (Giftturm) | Glockengießerei (Glockenturm) | Schaden über Zeit ↔ alle Türme schneller |
+| Händlergilde (Rift-Sammler) | Kristallschmiede (Kristallmine) | Rohstoffe für die Stadt ↔ Rift-Kristalle für den Kampf |
+| Orakel | Glücksbrunnen | Neuwürfe ↔ viel Glück |
+| Kapelle | Taverne | Tor heilt nach jeder Welle ↔ Karte zu Beginn der Nacht |
 
 ### Tutorial
 
@@ -56,27 +71,63 @@ Zu Beginn sind **4 Bauplätze** frei und **4 Gebäude** verfügbar: Thronsaal, B
 | Gebäude | Platz | Freischaltung | Wirkung | Upgrades (Auswahl) |
 |---|---|---|---|---|
 | Thronsaal | Thron | Start | Tor-Leben, neue Bauplätze, Universität | Königliche Klinge, Pfeilhagel-Training, Königsstiefel, Fleißige Hände, Eisenbeschlagenes Tor, Kriegskasse |
-| Bogenmacher | Stadt | Start | **Bogenturm + Ballista** | Mehr Bogentürme/Ballisten, Verstärkte Türme (höhere Stufen), Scharfe Pfeile, Schwere Bolzen |
-| Steinbruch | Berg | Start | Stein nach jedem Kampf | Bessere Spitzhacken, Goldader |
-| Bauernhof | Feld | Start | Nahrung nach jedem Kampf | Reiche Ernte, Gute Verpflegung (Angriffstempo) |
-| Universität | Stadt | Thronsaal 2 | Forschung | – |
-| Holzfäller | Feld | Forschung | Holz; **Sammler-Trupp** baut im Kampf automatisch ab | Sammler-Trupp, Scharfe Äxte |
-| Kanonengießerei | Stadt | Forschung | **Kanonenturm** | Mehr Kanonen, Verstärkte Kanonen, Schwarzpulver, Große Kugeln |
-| Magierakademie | Stadt | **Story Nacht 10** | **Magier- + Frostturm** | Mehr Magier/Frost, Höhere Magie, Arkanes Wissen |
-| Wachturm | Mauer | Forschung | Tor-Leben | Späher (Gold-Beute) |
-| Schatzkammer | Stadt | Forschung | Start-Rift-Kristalle, Gold-Beute | Steuern |
-| Orakel | Stadt | Forschung | bessere Upgrade-Karten, Neuwürfe | – |
+| Bogenmacher | Stadt | Start | **Bogenturm + Ballista** | Mehr Bogentürme/Ballisten, Verstärkte Türme, Scharfe Pfeile, Schwere Bolzen |
+| Steinbruch | Berg | Start | Stein | Bessere Spitzhacken, Goldader, Steinmetze (Türme billiger) |
+| Bauernhof | Feld | Start | Nahrung | Reiche Ernte, Gute Verpflegung, Erntefest (Glück) |
+| Universität | Stadt | Thronsaal 2 | **Forschungsbaum** | Gelehrte (schneller bauen), Bibliothek (Neuwurf) |
+| Holzfäller | Feld | Forstwirtschaft | Holz; Sammler-Trupp | Sammler-Trupp, Scharfe Äxte, Große Beute |
+| Fischerhütte | Feld | Fischerei | viel Nahrung | Große Netze, Räucherei |
+| Mine | Berg | Bergbau | Stein + Magiekristalle | Edelsteine, Tiefe Stollen |
+| Kanonengießerei | Stadt | Schießpulver | **Kanonenturm** | Mehr/Verstärkte Kanonen, Schwarzpulver, Große Kugeln, Kartätschen |
+| Belagerungswerkstatt | Stadt | Belagerungskunst | **Katapult** | Mehr/Verstärkte Katapulte, Felsbrocken, Spannseile |
+| Alchemistenhütte | Stadt | Alchemie | **Giftturm**, Magiekristalle | Mehr Gifttürme, Starke Gifte, Giftküche, Destille |
+| Glockengießerei | Stadt | Glockenguss | **Glockenturm** | Mehr/Große Glocken, Klangkörper, Weithall |
+| Händlergilde | Stadt | Karawanen | **Rift-Sammler**, Gold | Mehr Sammler, Große Karawanen, Packesel, Marktstände |
+| Kristallschmiede | Stadt | Kristallkunde | **Kristallmine** | Mehr Minen, Tiefe Schächte, Kristallbohrer, Kristallsäule |
+| Magiergilde | Stadt | **Story Nacht 10** | **Magier- + Frostturm**, **Magiebaum** | Mehr Magier/Frost, Höhere Magie, Arkanes Wissen, Manakristalle |
+| Wachturm | Mauer | Wehrtürme | Tor-Leben | Späher, Zinnen, Signalfeuer |
+| Schatzkammer | Stadt | Handel | Start-Rift-Kristalle, Gold-Beute | Steuern, Kristalltresor (Zinsen) |
+| Orakel | Stadt | Sterndeutung | Neuwürfe, +1 Glück | Sternkarten, Vorahnung (Startkarte) |
+| Glücksbrunnen | Stadt | Glücksspiel | +2 Glück, seltene Funde | Münzwurf, Wunschmünzen |
+| Kapelle | Stadt | Glaube | Tor heilt nach jeder Welle | Segen (Krit), Heilige Mauern |
+| Taverne | Stadt | Gastfreundschaft | Karte zu Beginn der Nacht | Stammgäste, Heldenlieder |
+
+### Forschungsbaum (Universität)
+
+Jede Forschung braucht ihre Vorgänger (Linien im Baum) und eine Universitäts-Stufe. Eine Forschung gleichzeitig.
+
+```
+Forstwirtschaft ─┬─ Fischerei ── Handel ── Karawanen
+                 └─ Bergbau ── Kristallkunde ── Glücksspiel
+Schießpulver ────┬─ Belagerungskunst ── Ballistik ── Baukunst
+                 └─ Alchemie ── Sterndeutung
+Wehrtürme ── Glockenguss ── Glaube ── Gastfreundschaft
+```
+
+### Magiebaum (Magiergilde)
+
+Eigener Forschungsplatz – läuft parallel zur Universität. Bringt vor allem Boni und zwei Türme.
+
+```
+            ┌─ Bannzauber (Bannturm) ── Bannmeister
+            ├─ Schutzrunen (Tor)
+Manafluss ──┼─ Arkane Macht ── Mana-Echo ── Erzmagier
+            ├─ Glückszauber ── Schicksalsweber ── Kristallfokus
+            └─ Windzauber (Windturm) ── Sturmmeister
+```
 
 ### Story-Nächte
 
 Besondere Nächte mit festem Rift und Belohnung (`src/data/story.ts`).
 Beispiel: **Nacht 10 – „Der entführte Hofmagier“** (Tech-Rift): Roboter haben den Hofmagier entführt.
-Belohnung: Die **Magierakademie** wird freigeschaltet.
+Belohnung: Die **Magiergilde** (mit Magiebaum) wird freigeschaltet.
 
 ## Nacht-Sphäre: der Kampf
 
 1. Ein Rift öffnet sich (Nacht 1–3: Urzeit, Tech, Weltraum; danach zufällig, Story-Nächte fest).
 2. Eine neue Karte entsteht: Weg(e), Sonderfelder, **Rohstoff-Felder** (Bäume, Felsen, Kristalle …).
+   Die Karte ist **28 × 13 Felder** groß (größer als der Bildschirm, ohne sichtbares Raster) –
+   mit dem Finger verschieben. Die Wege sind dadurch länger.
 3. Man startet mit Rift-Kristallen (200 + 30 pro Nacht + Stadt-Boni) und **beschwört Türme**.
    - Nur Türme, die die Stadt freigeschaltet hat.
    - **Limit pro Turmart** (z. B. 2 Bogentürme) und **maximale Turmstufe** – beides steigt durch Gebäude-Upgrades.
@@ -86,11 +137,23 @@ Belohnung: Die **Magierakademie** wird freigeschaltet.
 ### Beute
 
 - Jeder Gegner lässt **Rift-Kristalle** fallen. Sie fliegen nach kurzer Zeit von selbst in die Leiste.
-- Mit etwas Glück fällt **Gold** (Chance 15 %, mehr über Wachturm/Schatzkammer).
+- Mit etwas Glück fällt **Gold** (Chance 15 %, mehr über Wachturm/Schatzkammer, jeder Glückspunkt +15 %).
+- **Seltene Funde:** 1 % Grundchance + 0,5 % pro Glückspunkt: Magiekristalle und viel Gold.
 - Spezialgegner und Bosse lassen **Ressourcen** fallen (z. B. Hacker: Magiekristalle und Gold).
 - **Rohstoff-Felder** auf der Karte muss man abbauen: Feld antippen → **König schicken**.
   Der König läuft hin, baut ab (3 s) und kehrt zurück – **in der Zeit fehlt er am Tor**.
-  Danach ist das Feld freies Bauland. Später übernehmen **Sammler-Trupps** (Holzfäller) das während der Wellen.
+  Danach ist das Feld freies Bauland. Später übernehmen **Sammler-Trupps** (Holzfäller) und die
+  **Zivilisten des Rift-Sammlers** das während der Wellen.
+
+### Glück
+
+Glück ist ein Wert in Punkten (Anzeige links unter der Beute). Es kommt aus Gebäuden (Glücksbrunnen, Orakel,
+Bauernhof, Taverne), dem Magiebaum (Glückszauber) und Karten (Kleeblatt, Hufeisen, Glückspilz, Fortunas Gunst).
+
+- **Karten:** Jeder Punkt macht seltene, epische und legendäre Karten wahrscheinlicher (`rarityWeights` in `src/core/draft.ts`).
+  Spätere Karten in einer Nacht werden automatisch etwas besser.
+- **Gold-Beute:** +15 % Chance pro Punkt (`BALANCE.luckDropBonus`).
+- **Seltene Funde:** +0,5 % pro Punkt (`BALANCE.rareDropPerLuck`).
 - Alle Rifts bringen alle Ressourcen, nur die Mengen unterscheiden sich.
 
 ### Ende der Nacht
@@ -111,32 +174,35 @@ Belohnung: Die **Magierakademie** wird freigeschaltet.
 
 ## Türme
 
-| Turm | Kosten | Ziele | Besonderheit | Freigeschaltet durch |
-|---|---|---|---|---|
-| Bogenturm | 70 | Boden + Luft | schnell, günstig | Bogenmacher |
-| Ballista | 100 | **nur Luft** | großer Schaden, große Reichweite | Bogenmacher |
-| Kanonenturm | 110 | Boden | Flächenschaden | Kanonengießerei |
-| Magierturm | 120 | Boden | Kettenblitz, ignoriert Rüstung | Magierakademie |
-| Frostturm | 90 | Boden | verlangsamt, ignoriert Rüstung | Magierakademie |
-| König | – | Boden + Luft | am Tor, im Kampf verbesserbar, **Pfeilhagel**, baut Rohstoffe ab | – |
+| Turm | Kosten | Ziele | Besonderheit | Fähigkeit bei vollem Mana | Freigeschaltet durch |
+|---|---|---|---|---|---|
+| Bogenturm | 70 | Boden + Luft | schnell, günstig | **Pfeilsalve**: 5 Pfeile auf verschiedene Gegner | Bogenmacher |
+| Ballista | 100 | nur Luft | großer Schaden | **Durchbohren**: trifft alle Fluggegner in einer Linie | Bogenmacher |
+| Kanonenturm | 110 | Boden | Flächenschaden | **Großkaliber**: doppelter Schaden und Radius | Kanonengießerei |
+| Katapult | 140 | Boden | riesige Reichweite, zielt auf die **größte Gruppe** | **Felsenregen**: 5 Felsen | Belagerungswerkstatt |
+| Giftturm | 90 | Boden | Gift stapelt sich (bis 5×), wirkt über Zeit | **Giftwolke** auf der dichtesten Gruppe | Alchemistenhütte |
+| Magierturm | 120 | Boden | Kettenblitz, magisch | **Gewittersturm**: Blitz auf 8 Gegner | Magiergilde |
+| Frostturm | 90 | Boden | verlangsamt | **Eiszeit**: friert alle in Reichweite ein | Magiergilde |
+| Bannturm | 110 | Boden + Luft | entfernt Schilde, sperrt Gegner-Fähigkeiten | **Bannkreis**: alle in Reichweite 6 s gebannt | Magiebaum: Bannzauber |
+| Windturm | 100 | Boden + Luft | stößt Gegner zurück | **Wirbelsturm**: Fluggegner stürzen ab, Bodengegner fliegen zurück | Magiebaum: Windzauber |
+| Glockenturm | 100 | – | **passiv**: Türme in Reichweite +15/22/30 % Angriffstempo | **Sturmläuten**: alle Türme 5 s +50 % Tempo | Glockengießerei |
+| Rift-Sammler | 80 | – | **passiv**: 1/2/3 Zivilisten sammeln Rohstoff-Felder | **Sammelzug**: 3 Zivilisten mehr bis Wellenende | Händlergilde |
+| Kristallmine | 120 | – | **passiv**: alle 5 s Rift-Kristalle (4/7/11) | **Mutterader**: sofort 40 Rift-Kristalle | Kristallschmiede |
+| König | – | Boden + Luft | am Tor, im Kampf verbesserbar, **Pfeilhagel**, baut Rohstoffe ab | – | – |
+
+Zielwahl pro Turm (im Turmfenster umschaltbar): Erster · Stärkster · Nächster · Größte Gruppe.
 
 ### Turm-Werte (Fenster beim Antippen eines Turms)
 
 „Turm-Name Lvl. X“, darunter: Normaler Schaden · Magischer Schaden · Attack Speed · Range · Crit Chance ·
-Crit DMG · Mana · Mana Regeneration · Beschreibung der Fähigkeit.
+Crit DMG · Mana · Mana Regeneration · Beschreibung der Fähigkeit. Passive Türme zeigen stattdessen Aura,
+Zivilisten bzw. Ertrag.
 
 - Normaler Schaden wird durch Rüstung verringert, magischer nicht. Ein Turm kann beides haben.
 - Kritischer Treffer: Mit „Crit Chance“ wird der Schaden mit „Crit DMG“ multipliziert (150 % = 1,5-fach).
-- Mana füllt sich mit „Mana Regeneration“ pro Sekunde. Bei vollem Mana löst der Turm seine Fähigkeit aus.
-  **Stand:** Die Fähigkeiten sind nur beschrieben, ihre Wirkung ist noch ein Platzhalter.
-
-| Turm | Fähigkeit (Entwurf) |
-|---|---|
-| Bogenturm | Pfeilsalve: 5 Pfeile auf verschiedene Gegner |
-| Kanonenturm | Großkaliber: doppelter Schaden und Explosionsradius |
-| Magierturm | Gewittersturm: Blitz auf bis zu 8 Gegner ohne Abschwächung |
-| Frostturm | Eiszeit: friert Bodengegner in Reichweite 2 s ein |
-| Ballista | Durchbohren: Bolzen trifft alle Fluggegner in einer Linie |
+- Mana füllt sich **während der Wellen** mit „Mana Regeneration“ pro Sekunde. Bei vollem Mana löst der Turm
+  seine Fähigkeit aus. Ist kein Gegner in Reichweite, wartet er mit vollem Mana.
+- Boni für Fähigkeiten: „Stärke der Fähigkeiten“ (Arkane Macht, Karten) und „Chance auf kostenlose Fähigkeit“ (Mana-Echo).
 
 ## Rifts
 
@@ -148,12 +214,14 @@ Crit DMG · Mana · Mana Regeneration · Beschreibung der Fähigkeit.
 
 ## Upgrade-Karten (in der Nacht)
 
-| Seltenheit | Farbe | Chance | Beispiele |
+| Seltenheit | Farbe | Chance (Glück 0) | Beispiele |
 |---|---|---|---|
-| Gewöhnlich | Grau | 60 % | Bogentürme +15 % Schaden, Sofort +80 Rift-Kristalle, Tor +5 Leben |
-| Selten | Blau | 28 % | Alle Türme +10 % Schaden, Türme 10 % billiger |
-| Episch | Lila | 10 % | Kettenblitz, Panzerbrecher, Zinsen |
-| Legendär | Orange | 2 % | Alle Projektiltürme +1 Projektil, Zeitverzerrung |
+| Gewöhnlich | Grau | 60 % | Bogentürme +15 % Schaden, Kleeblatt (+1 Glück), Flickwerk (Tor heilt), Kristallsplitter |
+| Selten | Blau | 28 % | Hufeisen, Scharfe Klingen (Krit-Schaden), Zauberverstärker, Vorgeladen (Start-Mana) |
+| Episch | Lila | 10 % | Kettenblitz, Zinsen, Glückspilz, Manaschleife, Große Familie, Seuche |
+| Legendär | Orange | 2 % | Mehrfachschuss, Zeitverzerrung, Fortunas Gunst, Erzmagie, Blutkristalle |
+
+47 Karten insgesamt. Karten für Türme, die man nicht hat, werden nicht angeboten.
 
 ## Offene Design-Fragen
 
@@ -163,4 +231,5 @@ Crit DMG · Mana · Mana Regeneration · Beschreibung der Fähigkeit.
   oder soll es einen Countdown zwischen den Wellen geben?
 - Wofür überschüssige Rift-Kristalle? (z. B. Nachkauf von Karten, Reparatur des Tors)
 - Bauzeiten: echte Zeiten, Beschleunigen (z. B. per Werbung)?
-- Weitere Story-Nächte und Gebäude (Mine am Berg, Kaserne mit Soldaten, Tempel …)
+- Weitere Story-Nächte und Gebäude (Kaserne mit Soldaten, Rift-Observatorium …)
+- Balancing der neuen Türme und Entweder-oder-Paare beim Selbstspielen prüfen.

@@ -10,7 +10,10 @@ export const LABELS: Record<string, string> = {
   splashRadius: 'Explosionsradius (Felder)', slow: 'Verlangsamung', strength: 'Stärke', duration: 'Dauer (Sekunden)',
   chainTargets: 'Kettenziele', baseLimit: 'Anzahl pro Nacht (Start)', baseMaxLevel: 'Höchste Stufe im Kampf (Start)',
   targets: 'Ziele', ground: 'Bodengegner', air: 'Fluggegner', ability: 'Fähigkeit (bei vollem Mana)', projectile: 'Geschoss',
-  speed: 'Tempo', style: 'Aussehen', tags: 'Gruppen', attack: 'Angriffsart',
+  speed: 'Tempo', style: 'Aussehen', tags: 'Gruppen', attack: 'Angriffsart', targetMode: 'Zielwahl (Start)',
+  poison: 'Gift', dps: 'Schaden pro Sekunde', knockback: 'Rückstoß (Felder)', silence: 'Bann (Sekunden)', aura: 'Aura: Angriffstempo für Türme in Reichweite',
+  gatherers: 'Zivilisten', crystalIncome: 'Rift-Kristalle alle 5 Sekunden', arrows: 'Pfeile', damageMul: 'Schaden ×', radiusMul: 'Radius ×',
+  rocks: 'Steine', civilians: 'Zivilisten', duration_s: 'Dauer',
   // Gegner
   hp: 'Leben', armor: 'Rüstung', crystals: 'Rift-Kristalle beim Tod', gateDamage: 'Schaden am Tor', flying: 'Fliegt',
   boss: 'Boss', threat: 'Bedrohung (Kosten im Wellen-Budget)', radius: 'Größe (Pixel)', loot: 'Beute für die Stadt',
@@ -33,7 +36,8 @@ export const LABELS: Record<string, string> = {
   income: 'Ertrag nach jedem Kampf (pro Stufe)', upgrades: 'Verbesserungen', maxRank: 'Höchster Rang', requiredLevel: 'nötige Gebäudestufe je Rang',
   level: 'Stufe', throneLevel: 'ab Thronsaal-Stufe', x: 'Position x', y: 'Position y',
   // Forschung / Story
-  unlocksBuilding: 'schaltet Gebäude frei', night: 'Nacht', riftId: 'Rift', intro: 'Text vor dem Kampf', outro: 'Text nach dem Sieg',
+  unlocksBuilding: 'schaltet Gebäude frei', requires: 'braucht vorher', tree: 'Baum', col: 'Spalte im Baum', row: 'Zeile im Baum',
+  excludes: 'Entweder-oder mit', night: 'Nacht', riftId: 'Rift', intro: 'Text vor dem Kampf', outro: 'Text nach dem Sieg',
   // Ressourcen
   gold: 'Gold', holz: 'Holz', stein: 'Stein', magie: 'Magiekristalle', nahrung: 'Nahrung',
   // Balancing
@@ -47,6 +51,9 @@ export const LABELS: Record<string, string> = {
   dropLingerSeconds: 'Beute bleibt liegen (Sekunden)', kingMoveSpeed: 'König: Lauftempo (Felder/s)', harvestSeconds: 'Abbauzeit (Sekunden)',
   autoHarvestSeconds: 'Sammler: Sekunden pro Abbau', cardsPersistAcrossNights: 'Karten gelten über mehrere Nächte',
   buildSeconds: 'Bauzeit (Sekunden)', startResources: 'Startressourcen (neues Spiel)',
+  civilianSpeed: 'Zivilisten: Lauftempo (Felder/s)', civilianHarvestSeconds: 'Zivilisten: Abbauzeit (Sekunden)',
+  luckDropBonus: 'Glück: Gold-Chance pro Punkt', rareDropBase: 'Seltener Fund: Grundchance', rareDropPerLuck: 'Seltener Fund: pro Glückspunkt',
+  poisonMaxStacks: 'Gift: höchstens so oft stapelbar',
 };
 
 /** Kleine Erklärungen unter dem Feld */
@@ -57,13 +64,15 @@ export const HINTS: Record<string, string> = {
   enemySpeedFactor: '0,6 = 40 % langsamer, 1,3 = 30 % schneller', blockedDensity: '0,05 = 5 % der Felder', resourceDensity: '0,2 = 20 % der Felder',
   threat: 'Je höher, desto weniger dieser Gegner pro Welle', x: 'von 0 (links) bis 1280 (rechts)', y: 'von 0 (oben) bis 720 (unten)',
   buildSeconds: 'gilt für Bauen, Ausbauen und Forschen',
+  luckDropBonus: '0,15 = +15 % Gold-Chance je Glückspunkt', rareDropBase: '0,01 = 1 % pro Gegner', rareDropPerLuck: '0,005 = +0,5 % je Glückspunkt',
+  aura: '0,15 = +15 % Angriffstempo', requires: 'Kennungen anderer Forschungen', excludes: 'Kennungen anderer Gebäude',
 };
 
 /** Diese Felder sind technisch und werden nur angezeigt, nicht verändert. */
 export const READONLY = new Set([
   'id', 'tags', 'stat', 'kind', 'type', 'attack', 'style', 'family', 'variant', 'plot', 'unique', 'towerTags', 'unlocksTowers',
   'unlocksBuilding', 'riftId', 'deco', 'icon', 'path', 'buildable', 'blockedTiles', 'on', 'tile', 'enemy', 'rarity', 'night',
-  'normal', 'fast', 'tank', 'special', 'boss_list', 'flying', 'boss',
+  'normal', 'fast', 'tank', 'special', 'boss_list', 'flying', 'boss', 'tree', 'requires', 'excludes', 'targetMode',
 ]);
 
 /** Felder mit Farbwert (Zahl wie 0x5fa844) */

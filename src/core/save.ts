@@ -5,7 +5,7 @@ import { RESOURCE_IDS, emptyResources, type Resources } from './types';
 // Spielstand: wird im Browser (localStorage) gespeichert.
 // Später kann hier ein Cloud-Speicher angebunden werden (siehe docs/ROADMAP.md).
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 const STORAGE_KEY = 'riftdefense.save';
 
 /** Ein laufender Bauauftrag (Bauen/Ausbauen) oder eine laufende Forschung. */
@@ -17,6 +17,8 @@ export interface Job {
   id: string;
   /** Zeitpunkt der Fertigstellung (Date.now()-Millisekunden) */
   finishAt: number;
+  /** Gesamtdauer in Millisekunden (für den Fortschrittsbalken) */
+  duration?: number;
 }
 
 export interface CityState {
@@ -32,8 +34,10 @@ export interface CityState {
   story: string[];
   /** Laufender Bauauftrag (höchstens einer) */
   job: Job | null;
-  /** Laufende Forschung (höchstens eine) */
+  /** Laufende Forschung im Forschungsbaum der Universität (höchstens eine) */
   researchJob: Job | null;
+  /** Laufende Forschung im Magiebaum der Magiergilde (höchstens eine) */
+  magicJob: Job | null;
 }
 
 export interface SaveData {
@@ -60,7 +64,7 @@ export interface SaveData {
 }
 
 export function emptyCity(): CityState {
-  return { plots: {}, boughtPlots: [], upgrades: {}, research: [], story: [], job: null, researchJob: null };
+  return { plots: {}, boughtPlots: [], upgrades: {}, research: [], story: [], job: null, researchJob: null, magicJob: null };
 }
 
 export function defaultSave(seed = randomSeed()): SaveData {
@@ -92,6 +96,7 @@ export function migrateSave(raw: unknown): SaveData {
     for (const id of RESOURCE_IDS) resources[id] = Math.max(resources[id], base.resources[id]);
     city = emptyCity();
   }
+  // Version 3: zweiter Forschungsplatz (Magiebaum) – fehlt in alten Ständen und wird durch emptyCity() ergänzt
   return {
     version: SAVE_VERSION,
     seed: num(r.seed, base.seed),

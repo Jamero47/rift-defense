@@ -40,6 +40,15 @@ export class Enemy {
   /** Sekunden seit dem letzten Treffer */
   sinceHit = 99;
   flash = 0;
+  /** Gift: Schaden pro Sekunde (Summe der Stapel) und Restdauer */
+  poisonDps = 0;
+  poisonTimer = 0;
+  /** Gebannt: Fähigkeiten und Schild-Aufladung gesperrt */
+  silenced = 0;
+  /** Eingefroren: bewegt sich nicht */
+  frozen = 0;
+  /** Abgestürzt (Windturm): Fluggegner gilt als Bodengegner */
+  grounded = 0;
   readonly abilityTimers: number[];
   alive = true;
 
@@ -69,8 +78,9 @@ export class Enemy {
     this.place();
   }
 
+  /** Fliegt gerade (abgestürzte Fluggegner zählen als Bodengegner) */
   get flying(): boolean {
-    return this.def.flying;
+    return this.def.flying && this.grounded <= 0;
   }
 
   /** Reststrecke bis zum Tor in Pixeln */
@@ -84,7 +94,7 @@ export class Enemy {
     this.y = p.y;
     if (this.shadow) {
       this.shadow.setPosition(p.x + 4, p.y + 6);
-      this.sprite.setPosition(p.x, p.y - FLY_HEIGHT);
+      this.sprite.setPosition(p.x, p.y - (this.grounded > 0 ? 0 : FLY_HEIGHT));
     } else {
       this.sprite.setPosition(p.x, p.y);
     }
@@ -98,12 +108,13 @@ export class Enemy {
   }
 }
 
-export type TargetMode = 'first' | 'strong' | 'close';
+export type TargetMode = 'first' | 'strong' | 'close' | 'dense';
 
 export const TARGET_MODE_LABELS: Record<TargetMode, string> = {
   first: 'Vorderster',
   strong: 'Stärkster',
   close: 'Nächster',
+  dense: 'Größte Gruppe',
 };
 
 /** Fertig berechnete Werte eines Turms (inkl. aller Boni). Reichweite/Radius in Pixeln. */
@@ -117,6 +128,14 @@ export interface TowerStats {
   critDamage: number;
   maxMana: number;
   manaRegen: number;
+  poisonDps: number;
+  poisonDuration: number;
+  /** Rückstoß in Pixeln */
+  knockback: number;
+  silence: number;
+  aura: number;
+  gatherers: number;
+  crystalIncome: number;
   projectiles: number;
   splash: number;
   slowStrength: number;
@@ -139,6 +158,8 @@ export class Tower {
   disabled = 0;
   /** Aktuelles Mana; bei vollem Mana wird die Fähigkeit ausgelöst */
   mana = 0;
+  /** Zähler für die Kristallmine */
+  incomeTimer = 0;
   targetMode: TargetMode = 'first';
   stats!: TowerStats;
 
@@ -191,6 +212,10 @@ export interface HitInfo {
   splash: number;
   slowStrength: number;
   slowDuration: number;
+  poisonDps?: number;
+  poisonDuration?: number;
+  knockback?: number;
+  silence?: number;
 }
 
 export class Projectile {
@@ -220,6 +245,34 @@ export class Projectile {
 
   destroy(): void {
     this.alive = false;
+    this.sprite.destroy();
+  }
+}
+
+export type CivilianState = 'idle' | 'walking' | 'harvesting' | 'returning';
+
+/** Zivilist des Rift-Sammlers: läuft zu Rohstoff-Feldern, baut ab und bringt die Beute zurück. */
+export class Civilian {
+  readonly sprite: Phaser.GameObjects.Image;
+  x: number;
+  y: number;
+  state: CivilianState = 'idle';
+  target: { col: number; row: number } | null = null;
+  timer = 0;
+
+  constructor(
+    scene: Phaser.Scene,
+    readonly home: Tower,
+    /** Nur für diese Welle (Fähigkeit „Sammelzug“) */
+    readonly temporary: boolean,
+    depth: number,
+  ) {
+    this.x = home.x + (Math.random() - 0.5) * 20;
+    this.y = home.y + 16;
+    this.sprite = scene.add.image(this.x, this.y, 'civilian').setDepth(depth);
+  }
+
+  destroy(): void {
     this.sprite.destroy();
   }
 }

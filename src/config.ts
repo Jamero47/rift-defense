@@ -7,8 +7,9 @@ export const GAME_HEIGHT = 720;
 
 /** Kantenlänge eines Kartenfelds in Pixeln. */
 export const TILE = 72;
-export const COLS = 16;
-export const ROWS = 9;
+/** Größe der Kampfkarte in Feldern. Größer als der Bildschirm – man verschiebt sie mit dem Finger. */
+export const COLS = 28;
+export const ROWS = 13;
 
 /** Höhe der oberen Leiste (Gold, Welle, Knöpfe). */
 export const HUD_HEIGHT = 72;
@@ -18,7 +19,11 @@ export const MAP_X = 128;
 export const MAP_Y = HUD_HEIGHT;
 
 /** In dieser Zeile liegt das Stadttor; alle Wege enden hier. */
-export const GATE_ROW = 4;
+export const GATE_ROW = 6;
+
+/** Größe der ganzen Kampfwelt in Pixeln (Mauer links + Karte). */
+export const WORLD_WIDTH = MAP_X + COLS * TILE;
+export const WORLD_HEIGHT = MAP_Y + ROWS * TILE;
 /** x-Position, an der Gegner das Tor erreichen. */
 export const GATE_X = 84;
 
@@ -70,6 +75,18 @@ export const BALANCE = {
   harvestSeconds: 3,
   /** Sammler (Holzfäller-Upgrade): Sekunden zwischen zwei Abbauten, geteilt durch die Anzahl Sammler */
   autoHarvestSeconds: 25,
+  /** Zivilisten des Rift-Sammlers: Lauftempo (Felder/s) und Abbauzeit (s) */
+  civilianSpeed: 1.3,
+  civilianHarvestSeconds: 4,
+  /**
+   * Glück: Jeder Punkt erhöht die Chance auf Gold-Beute um 15 % (relativ),
+   * die Chance auf seltene Funde um 0,5 Prozentpunkte und verschiebt Karten zu höheren Seltenheiten.
+   */
+  luckDropBonus: 0.15,
+  rareDropBase: 0.01,
+  rareDropPerLuck: 0.005,
+  /** Höchstens so viele Gift-Stapel auf einem Gegner */
+  poisonMaxStacks: 5,
   /**
    * false: Upgrade-Karten gelten nur für die aktuelle Nacht (wie die Türme).
    * true: Karten bleiben über Nächte hinweg erhalten.

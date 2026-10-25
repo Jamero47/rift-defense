@@ -25,6 +25,8 @@ export interface TextOptions {
   origin?: [number, number];
   wrap?: number;
   stroke?: boolean;
+  /** Höchstbreite: längere Texte werden verkleinert statt umbrochen */
+  fit?: number;
 }
 
 export function addText(
@@ -48,6 +50,7 @@ export function addText(
   });
   const [ox, oy] = opts.origin ?? [0, 0];
   t.setOrigin(ox, oy);
+  if (opts.fit && t.width > opts.fit) t.setScale(opts.fit / t.width);
   return t;
 }
 
@@ -246,12 +249,24 @@ export function showDialog(
     root.add(btn);
     by += btnH + 12;
   }
-  return root;
+  return pin(root);
 }
 
-/** Kurzer Hinweis, der nach oben schwebt und verschwindet. */
-export function floatText(scene: Phaser.Scene, x: number, y: number, value: string, color = COLORS.gold, size = 18): void {
+/**
+ * Hält ein Objekt (und alle Kinder) am Bildschirm fest, auch wenn die Kamera die Karte verschiebt.
+ * Für Leisten, Dialoge und Einblendungen.
+ */
+export function pin<T extends Phaser.GameObjects.GameObject>(obj: T): T {
+  const o = obj as unknown as Phaser.GameObjects.Components.ScrollFactor & { list?: Phaser.GameObjects.GameObject[] };
+  if (typeof o.setScrollFactor === 'function') o.setScrollFactor(0);
+  if (Array.isArray(o.list)) for (const child of o.list) pin(child);
+  return obj;
+}
+
+/** Kurzer Hinweis, der nach oben schwebt und verschwindet. screen = am Bildschirm statt auf der Karte. */
+export function floatText(scene: Phaser.Scene, x: number, y: number, value: string, color = COLORS.gold, size = 18, screen = false): void {
   const t = addText(scene, x, y, value, size, { origin: [0.5, 0.5], color, stroke: true }).setDepth(900);
+  if (screen) pin(t);
   scene.tweens.add({ targets: t, y: y - 36, alpha: 0, duration: 900, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
 }
 

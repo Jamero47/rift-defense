@@ -72,23 +72,43 @@ try {
     await page.evaluate(() => window.rift.go('City'));
     await wait(400);
   } else {
-    await page.mouse.click(620, 385); // Thronsaal-Platz
+    await page.mouse.click(610, 385); // Thronsaal-Platz
     await wait(300);
     await shot('03-build-choice');
     await press('Bauen');
     await wait(1500);
     await shot('04-construction');
     await wait(4200);
-    await page.mouse.click(460, 222); // Stadtplatz 1
+    await page.mouse.click(550, 200); // Stadtplatz 1
     await press('Bauen');
     await wait(5600);
-    await page.mouse.click(460, 222);
+    await page.mouse.click(550, 200);
     await wait(300);
     await shot('05-bogenmacher');
     await press('Kaufen'); // erstes Upgrade (Mehr Bogentürme)
     await press('X');
   }
   await shot('06-city');
+  if (fullCity) {
+    // Forschungsbaum und Magiebaum ansehen
+    await page.mouse.click(670, 200); // Universität (stadt_2)
+    await wait(300);
+    await shot('06a-universitaet');
+    await press('Forschungsbaum');
+    await wait(300);
+    await shot('06b-forschungsbaum');
+    await press('X');
+    await page.mouse.click(790, 200); // Magiergilde (stadt_4)
+    await wait(300);
+    await press('Magiebaum');
+    await wait(300);
+    await shot('06c-magiebaum');
+    await press('X');
+    await page.mouse.click(670, 570); // freier Stadtplatz → Bauauswahl
+    await wait(300);
+    await shot('06d-bauauswahl');
+    await press('X');
+  }
   await page.evaluate((n) => window.rift.save.update((d) => { d.night = n; }), night);
   await page.evaluate(() => window.rift.go('City'));
   await wait(300);
@@ -105,34 +125,38 @@ try {
   // ---------- Kampf
   const cell = await page.evaluate(() => {
     const b = window.rift.battle();
-    for (let row = 0; row < 9; row++) {
-      for (let col = 2; col < 14; col++) {
-        const near = [[0, 1], [1, 0], [0, -1], [-1, 0]].some(([dc, dr]) => b.setup.map.tiles[row + dr]?.[col + dc] && b.tileAt(col + dc, row + dr).path);
-        if (b.tileAt(col, row).buildable && near) return b.cellCenter({ col, row });
+    const tiles = b.setup.map.tiles;
+    for (let row = 0; row < tiles.length; row++) {
+      for (let col = 2; col < tiles[0].length - 2; col++) {
+        const near = [[0, 1], [1, 0], [0, -1], [-1, 0]].some(([dc, dr]) => tiles[row + dr]?.[col + dc] && b.tileAt(col + dc, row + dr).path);
+        if (b.tileAt(col, row).buildable && near) return b.focusCell({ col, row });
       }
     }
     return null;
   });
+  await wait(100);
   await page.mouse.click(cell.x, cell.y);
   await wait(300);
   await shot('09-build-menu');
-  await page.mouse.click(5, 715); // Menü schließen
+  await page.evaluate(() => window.rift.battle().menus.close()); // Menü schließen
 
   // König zu einem Rohstoff schicken
   const res = await page.evaluate(() => {
     const b = window.rift.battle();
+    const tiles = b.setup.map.tiles;
     let best = null;
-    for (let row = 0; row < 9; row++) {
-      for (let col = 0; col < 16; col++) {
+    for (let row = 0; row < tiles.length; row++) {
+      for (let col = 0; col < tiles[0].length; col++) {
         if (!b.tileAt(col, row).harvest) continue;
         const c = b.cellCenter({ col, row });
         const d = Math.hypot(c.x - b.kingHome.x, c.y - b.kingHome.y);
-        if (!best || d < best.d) best = { ...c, d };
+        if (!best || d < best.d) best = { col, row, d };
       }
     }
-    return best;
+    return best && b.focusCell(best);
   });
   if (res) {
+    await wait(100);
     await page.mouse.click(res.x, res.y);
     await wait(300);
     await shot('10-harvest-menu');
@@ -140,6 +164,13 @@ try {
     await wait(1200);
     await shot('11-king-walking');
   }
+  // Karte verschieben (Ziehen mit dem Finger)
+  await page.mouse.move(900, 500);
+  await page.mouse.down();
+  await page.mouse.move(600, 380, { steps: 8 });
+  await page.mouse.up();
+  await wait(200);
+  await shot('11b-map-scrolled');
 
   if (defeatTest) {
     await page.evaluate(() => { const b = window.rift.battle(); b.cycleSpeed(); b.cycleSpeed(); b.gateHp = 3; });
@@ -155,7 +186,8 @@ try {
     console.log('Nach der Werbung:', JSON.stringify(after));
     if (after.phase !== 'build' || after.gateHp !== 3) errors.push('Werbung: Welle wurde nicht korrekt wiederhergestellt');
   } else if (!quick) {
-    await page.evaluate(() => { const b = window.rift.battle(); b.cycleSpeed(); b.cycleSpeed(); });
+    // Kamera zurück zum Tor, dort stehen die Türme
+    await page.evaluate(() => { const b = window.rift.battle(); b.cycleSpeed(); b.cycleSpeed(); b.cameras.main.setScroll(0, b.cameras.main.scrollY); });
     let shots = 0;
     for (let tick = 0; tick < 700; tick++) {
       await wait(400);
@@ -175,7 +207,7 @@ try {
       }
       if (info.outcome === 'defeat' || (info.phase === 'ended' && info.gateHp <= 0)) {
         await shot('15-defeat');
-        console.log('Niederlage in Welle', info.wave + 1, 'von', info.waves);
+        console.log('Niederlage in Welle', info.wave + 1, 'von', info.waves, '– Türme:', info.towers, 'Kristalle:', info.crystals);
         await page.evaluate(() => window.rift.battle().giveUp());
       }
       if (info.phase === 'wave' && shots < 2 && info.enemies > 8) await shot(`12-battle-wave-${++shots}`);
@@ -205,18 +237,24 @@ console.log(`OK – Screenshots in ${OUT}/`);
 function buildFullCity() {
   window.rift.save.update((d) => {
     d.city.plots = {
-      thron: { building: 'thronsaal', level: 3 },
+      thron: { building: 'thronsaal', level: 5 },
       stadt_1: { building: 'bogenmacher', level: 2 },
       stadt_2: { building: 'universitaet', level: 1 },
       stadt_3: { building: 'giesserei', level: 1 },
-      stadt_4: { building: 'akademie', level: 1 },
+      stadt_4: { building: 'akademie', level: 2 },
+      // Zum Testen ALLE Türme – im echten Spiel schließen sich manche Gebäude gegenseitig aus
+      stadt_5: { building: 'alchemistenhuette', level: 1 },
+      stadt_7: { building: 'belagerungswerkstatt', level: 1 },
+      stadt_8: { building: 'glockengiesserei', level: 1 },
+      stadt_9: { building: 'haendlergilde', level: 1 },
+      stadt_10: { building: 'kristallschmiede', level: 1 },
       berg: { building: 'steinbruch', level: 2 },
       feld_1: { building: 'bauernhof', level: 1 },
       feld_2: { building: 'holzfaeller', level: 1 },
     };
-    d.city.boughtPlots = ['stadt_3', 'feld_2'];
-    d.city.research = ['forstwirtschaft', 'schiesspulver'];
-    d.city.story = [];
+    d.city.boughtPlots = ['stadt_3', 'stadt_5', 'stadt_7', 'stadt_9', 'stadt_10', 'feld_2'];
+    d.city.research = ['forstwirtschaft', 'schiesspulver', 'manafluss', 'bannzauber', 'windzauber', 'glueckszauber'];
+    d.city.story = ['hofmagier'];
     d.city.upgrades = { mehr_bogentuerme: 2, bogenturm_stufen: 1, sammler_trupp: 1, koenigsklinge: 2 };
   });
 }
@@ -225,20 +263,27 @@ function buildFullCity() {
 function autoBuild() {
   const b = window.rift.battle();
   const spots = [];
-  for (let row = 0; row < 9; row++) {
-    for (let col = 0; col < 16; col++) {
+  const tiles = b.setup.map.tiles;
+  for (let row = 0; row < tiles.length; row++) {
+    for (let col = 0; col < tiles[0].length; col++) {
       if (!b.tileAt(col, row).buildable) continue;
       let near = 0;
       for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
-        const id = b.setup.map.tiles[row + dr]?.[col + dc];
+        const id = tiles[row + dr]?.[col + dc];
         if (id && b.tileAt(col + dc, row + dr).path) near++;
       }
       if (near > 0) spots.push({ col, row, near });
     }
   }
-  spots.sort((a, b2) => b2.near - a.near || a.col - b2.col);
+  // Nah am Tor zuerst (dort kommen alle Gegner vorbei)
+  const gate = b.kingHome;
+  const score = (s) => s.near * 2 - Math.hypot(b.cellCenter(s).x - gate.x, b.cellCenter(s).y - gate.y) / 72;
+  spots.sort((a, b2) => score(b2) - score(a));
   // Jede Turmart der Reihe nach probieren; tryBuild prüft Limit und Rift-Kristalle selbst
-  const order = ['bow', 'ballista', 'cannon', 'mage', 'frost'].filter((t) => b.availableTowers.includes(t));
+  // Erst Angriffstürme; Wirtschaft und Unterstützung erst mit Polster
+  const attack = ['bow', 'ballista', 'cannon', 'catapult', 'poison', 'mage', 'frost', 'banner', 'wind'];
+  const extra = b.crystals > 250 ? ['bell', 'mine', 'gatherer'] : [];
+  const order = [...attack, ...extra].filter((t) => b.availableTowers.includes(t));
   for (const s of spots) {
     if (b.towers.some((t) => t.col === s.col && t.row === s.row)) continue;
     if (!order.some((id) => b.tryBuild(id, s))) break;

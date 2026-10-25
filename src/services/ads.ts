@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
-import { addText } from '../ui/widgets';
+import { addText, pin } from '../ui/widgets';
 
 // Werbung für Belohnungen ("Rewarded Ads").
 // Aktuell nur ein Platzhalter mit Countdown. Für die echte App wird hier
@@ -19,6 +19,7 @@ class PlaceholderAdService implements AdService {
       const title = addText(scene, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40, 'Werbung (Platzhalter)', 36, { origin: [0.5, 0.5] });
       const count = addText(scene, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30, '3', 48, { origin: [0.5, 0.5], color: '#facc15' });
       root.add([bg, title, count]);
+      pin(root);
       let left = 3;
       scene.time.addEvent({
         delay: 1000,

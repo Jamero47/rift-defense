@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { BALANCE, COLS, GAME_HEIGHT, GAME_WIDTH, GATE_ROW, GATE_X, MAP_X, MAP_Y, ROWS, TILE } from '../config';
+import { BALANCE, COLS, GAME_HEIGHT, GAME_WIDTH, GATE_ROW, GATE_X, HUD_HEIGHT, MAP_X, MAP_Y, ROWS, TILE, WORLD_HEIGHT, WORLD_WIDTH } from '../config';
 import { rollCards } from '../core/draft';
-import { cityModifiers, unlockedTowers } from '../core/city';
+import { cityModifiers, towerSourceName, unlockedTowers } from '../core/city';
 import { Modifiers } from '../core/modifiers';
 import { cardModifiers, computeRewards, setupNight, type NightSetup } from '../core/progression';
 import { Rng, randomSeed } from '../core/rng';
@@ -11,18 +11,17 @@ import { RESOURCE_IDS, addResources, emptyResources, type GridPos, type Modifier
 import type { WaveDef } from '../core/wavegen';
 import type { CardDef } from '../data/cards';
 import { getCard } from '../data/cards';
-import { getBuilding } from '../data/buildings';
 import { getEnemy, type EnemyAbility } from '../data/enemies';
 import { KING, KING_MAX_LEVEL } from '../data/king';
 import type { RiftDef, TileDef } from '../data/rifts';
 import { RIFT_CRYSTAL } from '../data/resources';
 import { getTower, type TowerDef, type TowerLevel } from '../data/towers';
-import { tileKey } from '../game/textures';
+import { GROUND_VARIANTS, tileKey } from '../game/textures';
 import { ads } from '../services/ads';
 import { showCardDraft } from '../ui/cardDraft';
-import { COLORS, addText, floatText, showDialog } from '../ui/widgets';
+import { COLORS, addText, floatText, pin, showDialog } from '../ui/widgets';
 import { DropManager, type DropKind } from './drops';
-import { Enemy, FLY_HEIGHT, Projectile, Tower, type HitInfo, type TargetMode, type TowerStats } from './entities';
+import { Civilian, Enemy, FLY_HEIGHT, Projectile, Tower, type HitInfo, type TargetMode, type TowerStats } from './entities';
 import { Hud, LOOT_PANEL } from './hud';
 import { BattleMenus } from './menus';
 import type { ResultData } from '../scenes/ResultScene';
@@ -63,6 +62,18 @@ interface Strike {
   y: number;
   damage: number;
   radius: number;
+  /** Trifft auch Fluggegner (Pfeilhagel) */
+  air?: boolean;
+}
+
+/** Giftwolke auf dem Boden */
+interface Cloud {
+  x: number;
+  y: number;
+  radius: number;
+  dps: number;
+  t: number;
+  tick: number;
 }
 
 interface Beam {
@@ -135,7 +146,16 @@ export class BattleScene extends Phaser.Scene {
   abilityCooldown = 0;
   abilityTargeting = false;
   private strikes: Strike[] = [];
+  private clouds: Cloud[] = [];
   private beams: Beam[] = [];
+  civilians: Civilian[] = [];
+  /** Sturmläuten: zusätzliches Angriffstempo für alle Türme */
+  private rallyBonus = 0;
+  private rallyTimer = 0;
+  /** Noch offene Karten zu Beginn der Nacht (Taverne) */
+  private startDrafts = 0;
+  /** Kamera ziehen: Startpunkt und ob gerade gezogen wird */
+  private drag: { x: number; y: number; sx: number; sy: number; moved: boolean } | null = null;
 
   draftsDone = 0;
   rerollsLeft = 0;
@@ -195,7 +215,13 @@ export class BattleScene extends Phaser.Scene {
     this.abilityCooldown = 0;
     this.abilityTargeting = false;
     this.strikes = [];
+    this.clouds = [];
     this.beams = [];
+    this.civilians = [];
+    this.rallyBonus = 0;
+    this.rallyTimer = 0;
+    this.startDrafts = Math.floor(this.mods.flat('startCards'));
+    this.drag = null;
     this.draftsDone = 0;
     this.rerollsLeft = Math.floor(this.mods.flat('cardRerolls'));
     this.snapshots = [];
@@ -216,10 +242,17 @@ export class BattleScene extends Phaser.Scene {
     this.fxGfx = this.add.graphics().setDepth(DEPTH.fx);
     this.kingSprite = this.add.image(this.kingPos.x, this.kingPos.y, 'king').setDepth(DEPTH.king);
 
+    this.setupCamera();
     this.hud = new Hud(this);
     this.drops = new DropManager(this, DEPTH.fx + 5, (kind) => this.dropTarget(kind), (kind, amount) => this.creditDrop(kind, amount));
     this.menus = new BattleMenus(this);
+    this.input.on('pointerdown', this.onPointerDown, this);
+    this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
+    this.input.on('wheel', (_p: unknown, _o: unknown, dx: number, dy: number) => {
+      this.cameras.main.scrollX += dx;
+      this.cameras.main.scrollY += dy;
+    });
     this.hud.setPreview(this.waves[0]);
     this.showTutorial();
     this.banner(`Nacht ${this.setup.night}`, this.rift.name, this.rift.color);
@@ -227,7 +260,9 @@ export class BattleScene extends Phaser.Scene {
     const story = this.setup.story;
     if (story && !saveStore.get().city.story.includes(story.id)) {
       this.paused = true;
-      showDialog(this, story.title, story.intro, [{ label: 'Zur Verteidigung!', onClick: () => (this.paused = false) }], { titleColor: COLORS.gold });
+      showDialog(this, story.title, story.intro, [{ label: 'Zur Verteidigung!', onClick: () => { this.paused = false; this.nextStartDraft(); } }], { titleColor: COLORS.gold });
+    } else {
+      this.nextStartDraft();
     }
   }
 
@@ -270,7 +305,7 @@ export class BattleScene extends Phaser.Scene {
       this.tileImages.push([]);
       for (let col = 0; col < COLS; col++) {
         const tile = this.tileAt(col, row);
-        const img = this.add.image(MAP_X + col * TILE + TILE / 2, MAP_Y + row * TILE + TILE / 2, tileKey(this.rift.id, tiles[row][col])).setDepth(DEPTH.tiles);
+        const img = this.add.image(MAP_X + col * TILE + TILE / 2, MAP_Y + row * TILE + TILE / 2, this.tileTexture(col, row, tiles[row][col])).setDepth(DEPTH.tiles);
         // Texturen zeigen nach links (Winkel π) – passend zur Laufrichtung drehen
         if (tile.deco === 'conveyor') img.setRotation((direction.get(`${col},${row}`) ?? Math.PI) - Math.PI);
         this.tileImages[row].push(img);
@@ -299,8 +334,8 @@ export class BattleScene extends Phaser.Scene {
     const starts = new Set(this.setup.map.paths.map((p) => p[0].row));
     for (const row of starts) {
       const y = MAP_Y + row * TILE + TILE / 2;
-      const portal = this.add.image(GAME_WIDTH - 14, y, `portal_${this.rift.id}`).setDepth(DEPTH.wall).setScale(0.75);
-      const swirl = this.add.image(GAME_WIDTH - 14, y, 'portal_swirl').setDepth(DEPTH.wall).setScale(0.55).setTint(this.rift.color);
+      const portal = this.add.image(WORLD_WIDTH - 14, y, `portal_${this.rift.id}`).setDepth(DEPTH.wall).setScale(0.75);
+      const swirl = this.add.image(WORLD_WIDTH - 14, y, 'portal_swirl').setDepth(DEPTH.wall).setScale(0.55).setTint(this.rift.color);
       this.tweens.add({ targets: swirl, angle: 360, duration: 4000, repeat: -1 });
       this.tweens.add({ targets: portal, scale: 0.82, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
@@ -311,9 +346,9 @@ export class BattleScene extends Phaser.Scene {
     const gateY = MAP_Y + GATE_ROW * TILE + TILE / 2;
     // Stadt hinter der Mauer
     g.fillStyle(0x0d0f1c, 1);
-    g.fillRect(0, MAP_Y, 72, GAME_HEIGHT - MAP_Y);
+    g.fillRect(0, MAP_Y, 72, WORLD_HEIGHT - MAP_Y);
     const roofs = [0x5b2a2a, 0x3d3a5c, 0x4a3b2a];
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < ROWS; i++) {
       const y = MAP_Y + 18 + i * 72;
       const x = 8 + (i % 2) * 18;
       g.fillStyle(0x2a2633, 1);
@@ -326,15 +361,15 @@ export class BattleScene extends Phaser.Scene {
     }
     // Mauer
     g.fillStyle(0x6b6f7a, 1);
-    g.fillRect(72, MAP_Y, 44, GAME_HEIGHT - MAP_Y);
+    g.fillRect(72, MAP_Y, 44, WORLD_HEIGHT - MAP_Y);
     g.lineStyle(1, 0x3f434b, 1);
-    for (let y = MAP_Y; y < GAME_HEIGHT; y += 16) {
+    for (let y = MAP_Y; y < WORLD_HEIGHT; y += 16) {
       g.lineBetween(72, y, 116, y);
       const off = ((y - MAP_Y) / 16) % 2 ? 11 : 0;
       for (let x = 72 + off; x < 116; x += 22) g.lineBetween(x, y, x, y + 16);
     }
     g.fillStyle(0x7d828e, 1);
-    for (let y = MAP_Y + 4; y < GAME_HEIGHT; y += 24) g.fillRect(114, y, 10, 14);
+    for (let y = MAP_Y + 4; y < WORLD_HEIGHT; y += 24) g.fillRect(114, y, 10, 14);
     // Tor
     g.fillStyle(0x1a1208, 1);
     g.fillRoundedRect(70, gateY - 34, 50, 68, { tl: 24, tr: 24, bl: 0, br: 0 });
@@ -348,10 +383,54 @@ export class BattleScene extends Phaser.Scene {
 
   // ================================================================ Eingabe
 
+  private setupCamera(): void {
+    const cam = this.cameras.main;
+    cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    // Start: Tor in der Mitte des sichtbaren Bereichs (unter der Leiste)
+    const gateY = MAP_Y + GATE_ROW * TILE + TILE / 2;
+    cam.setScroll(0, gateY - (HUD_HEIGHT + GAME_HEIGHT) / 2);
+  }
+
+  private onPointerDown(pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]): void {
+    if (over.length > 0) return;
+    const cam = this.cameras.main;
+    this.drag = { x: pointer.x, y: pointer.y, sx: cam.scrollX, sy: cam.scrollY, moved: false };
+  }
+
+  /** Karte mit dem Finger verschieben */
+  private onPointerMove(pointer: Phaser.Input.Pointer): void {
+    if (!this.drag || !pointer.isDown) return;
+    const dx = pointer.x - this.drag.x;
+    const dy = pointer.y - this.drag.y;
+    if (!this.drag.moved && Math.hypot(dx, dy) < 12) return;
+    this.drag.moved = true;
+    const cam = this.cameras.main;
+    cam.setScroll(cam.clampX(this.drag.sx - dx), cam.clampY(this.drag.sy - dy));
+  }
+
+  /** Bildschirmposition → Kartenposition */
+  toWorld(sx: number, sy: number): Vec {
+    const cam = this.cameras.main;
+    return { x: sx + cam.scrollX, y: sy + cam.scrollY };
+  }
+
+  /** Verschiebt die Kamera, sodass das Feld sichtbar ist, und gibt dessen Bildschirmposition zurück (für Tests). */
+  focusCell(cell: GridPos): Vec {
+    const c = this.cellCenter(cell);
+    const cam = this.cameras.main;
+    // Grenzen sofort anwenden (Phaser macht das sonst erst beim nächsten Bild)
+    cam.setScroll(cam.clampX(c.x - GAME_WIDTH / 2), cam.clampY(c.y - (HUD_HEIGHT + GAME_HEIGHT) / 2));
+    return { x: c.x - cam.scrollX, y: c.y - cam.scrollY };
+  }
+
   private onPointerUp(pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]): void {
+    const dragged = this.drag?.moved;
+    this.drag = null;
+    if (dragged) return; // war ein Verschieben, kein Tippen
     if (over.length > 0) return; // Knopf oder Menü wurde getroffen
     if (this.phase === 'ended' || this.phase === 'draft' || this.paused) return;
-    const { x, y } = pointer;
+    if (pointer.y < HUD_HEIGHT) return;
+    const { x, y } = this.toWorld(pointer.x, pointer.y);
 
     if (this.abilityTargeting) {
       if (this.inMap(x, y)) this.castAbility(x, y);
@@ -380,6 +459,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // ================================================================ Hilfen
+
+  /** Boden bekommt eine von mehreren Varianten, damit kein Raster sichtbar ist */
+  private tileTexture(col: number, row: number, id: string): string {
+    if (id !== 'ground') return tileKey(this.rift.id, id);
+    const v = Math.abs((col * 73856093) ^ (row * 19349663) ^ this.setup.seed) % GROUND_VARIANTS;
+    return v === 0 ? tileKey(this.rift.id, id) : `${tileKey(this.rift.id, id)}_${v}`;
+  }
 
   tileAt(col: number, row: number): TileDef {
     return this.rift.tiles[this.tiles[row][col]];
@@ -420,8 +506,7 @@ export class BattleScene extends Phaser.Scene {
 
   /** Welches Gebäude schaltet diesen Turm frei? (für Hinweise) */
   towerSource(def: TowerDef): string {
-    const id = { bow: 'bogenmacher', ballista: 'bogenmacher', cannon: 'giesserei', mage: 'akademie', frost: 'akademie' }[def.id];
-    return id ? getBuilding(id).name : 'Stadt';
+    return towerSourceName(def.id);
   }
 
   recomputeMods(): void {
@@ -445,6 +530,13 @@ export class BattleScene extends Phaser.Scene {
       critDamage: m.apply('critDamage', lvl.critDamage, tags),
       maxMana: Math.max(1, m.apply('maxMana', lvl.mana, tags)),
       manaRegen: m.apply('manaRegen', lvl.manaRegen, tags),
+      poisonDps: lvl.poison ? m.apply('poisonDamage', lvl.poison.dps, tags) * dmgMul : 0,
+      poisonDuration: lvl.poison?.duration ?? 0,
+      knockback: lvl.knockback ? m.apply('knockback', lvl.knockback, tags) * TILE : 0,
+      silence: lvl.silence ?? 0,
+      aura: lvl.aura ? m.apply('auraStrength', lvl.aura, tags) : 0,
+      gatherers: lvl.gatherers ? Math.round(m.apply('gatherers', lvl.gatherers, tags)) : 0,
+      crystalIncome: lvl.crystalIncome ? m.apply('mineIncome', lvl.crystalIncome, tags) : 0,
       projectiles: def.attack === 'projectile' ? Math.max(1, Math.round(m.apply('projectiles', 1, tags))) : 1,
       splash: lvl.splashRadius ? m.apply('splashRadius', lvl.splashRadius, tags) * TILE : 0,
       slowStrength: lvl.slow ? Math.min(0.85, m.apply('slowStrength', lvl.slow.strength, tags)) : 0,
@@ -489,6 +581,9 @@ export class BattleScene extends Phaser.Scene {
     const tower = new Tower(this, def, cell.col, cell.row, c.x, c.y, tile, DEPTH.towers);
     tower.spent = cost;
     tower.stats = this.computeTowerStats(def, 1, tile);
+    if (def.targetMode) tower.targetMode = def.targetMode;
+    tower.mana = tower.stats.maxMana * Math.min(1, this.mods.flat('startMana'));
+    if (def.attack === 'none') tower.top.setRotation(-Math.PI / 2);
     this.towers.push(tower);
     this.towerAt[cell.row][cell.col] = tower;
     this.ringFx(c.x, c.y, 0xffffff, 0.6);
@@ -520,6 +615,7 @@ export class BattleScene extends Phaser.Scene {
     floatText(this, t.x, t.y, `+${this.sellValue(t)}`, RIFT_CRYSTAL.color);
     this.towerAt[t.row][t.col] = null;
     this.towers = this.towers.filter((x) => x !== t);
+    this.removeCivilians((c) => c.home === t);
     t.destroy();
   }
 
@@ -566,7 +662,15 @@ export class BattleScene extends Phaser.Scene {
     const bonus = BALANCE.waveClearCrystalsBase + BALANCE.waveClearCrystalsPerWave * this.waveIndex;
     const interest = Math.min(50, Math.floor(this.crystals * this.mods.flat('interest')));
     this.crystals += bonus + interest;
-    floatText(this, GAME_WIDTH / 2, MAP_Y + 140, `Welle geschafft! +${bonus + interest} Rift-Kristalle`, RIFT_CRYSTAL.color, 26);
+    floatText(this, GAME_WIDTH / 2, MAP_Y + 140, `Welle geschafft! +${bonus + interest} Rift-Kristalle`, RIFT_CRYSTAL.color, 26, true);
+    const heal = Math.floor(this.mods.flat('gateRegen'));
+    if (heal > 0 && this.gateHp < this.gateMaxHp) {
+      this.gateHp = Math.min(this.gateMaxHp, this.gateHp + heal);
+      floatText(this, GAME_WIDTH / 2, MAP_Y + 180, `Tor +${heal}`, COLORS.good, 22, true);
+    }
+    this.removeCivilians((c) => c.temporary);
+    this.rallyTimer = 0;
+    this.clouds = [];
     this.currentWave = null;
 
     if (this.waveIndex >= this.waves.length) {
@@ -579,10 +683,10 @@ export class BattleScene extends Phaser.Scene {
     else this.phase = 'build';
   }
 
-  private openDraft(): void {
+  openDraft(): void {
     this.phase = 'draft';
     this.menus.close();
-    const luck = this.mods.flat('cardLuck') + this.draftsDone * 0.4;
+    const luck = this.luck() + this.draftsDone; // spätere Karten werden besser
     const tags = new Set(this.availableTowers.flatMap((id) => getTower(id).tags));
     const roll = () => rollCards(this.rng, this.cards, luck, 3, tags);
     showCardDraft(this, {
@@ -605,6 +709,19 @@ export class BattleScene extends Phaser.Scene {
     if (card.instant?.heal) this.gateHp = Math.min(this.gateMaxHp, this.gateHp + card.instant.heal);
     this.recomputeMods();
     this.phase = 'build';
+    this.nextStartDraft();
+  }
+
+  /** Karten zu Beginn der Nacht (Taverne) nacheinander anbieten */
+  private nextStartDraft(): void {
+    if (this.startDrafts <= 0 || this.waveIndex > 0 || this.phase !== 'build') return;
+    this.startDrafts--;
+    this.openDraft();
+  }
+
+  /** Glück: aus Stadt, Forschung, Karten */
+  luck(): number {
+    return this.mods.flat('luck');
   }
 
   private makeSnapshot(): Snapshot {
@@ -621,6 +738,9 @@ export class BattleScene extends Phaser.Scene {
 
   private restoreSnapshot(s: Snapshot): void {
     this.drops.flushAll();
+    this.removeCivilians(() => true);
+    this.clouds = [];
+    this.rallyTimer = 0;
     for (const e of this.enemies) e.destroy();
     for (const p of this.projectiles) p.destroy();
     for (const t of this.towers) t.destroy();
@@ -671,7 +791,10 @@ export class BattleScene extends Phaser.Scene {
     this.updateKing(dt);
     this.updateProjectiles(dt);
     this.updateStrikes(dt);
+    this.updateClouds(dt);
+    this.updateCivilians(dt);
     this.updateAutoHarvest(dt);
+    if (this.rallyTimer > 0) this.rallyTimer -= dt;
     this.abilityCooldown = Math.max(0, this.abilityCooldown - dt);
     if (this.phase === 'wave' && this.spawnQueue.length === 0 && this.enemies.length === 0) this.onWaveCleared();
   }
@@ -696,7 +819,17 @@ export class BattleScene extends Phaser.Scene {
       e.sinceHit += dt;
       if (e.slowTimer > 0 && (e.slowTimer -= dt) <= 0) e.slowFactor = 1;
       if (e.boostTimer > 0 && (e.boostTimer -= dt) <= 0) e.boostFactor = 1;
-      const abilities = e.def.abilities ?? [];
+      if (e.silenced > 0) e.silenced -= dt;
+      if (e.frozen > 0) e.frozen -= dt;
+      if (e.grounded > 0) e.grounded -= dt;
+      // Gift wirkt über Zeit
+      if (e.poisonTimer > 0) {
+        e.poisonTimer -= dt;
+        this.dotDamage(e, e.poisonDps * dt);
+        if (e.poisonTimer <= 0) e.poisonDps = 0;
+        if (!e.alive) continue;
+      }
+      const abilities = e.silenced > 0 ? [] : e.def.abilities ?? [];
       for (let i = 0; i < abilities.length; i++) {
         const a = abilities[i];
         if (a.type === 'shield') {
@@ -714,7 +847,7 @@ export class BattleScene extends Phaser.Scene {
         const cell = this.toCell(e.x, e.y);
         if (cell) tileFactor = this.tileAt(cell.col, cell.row).enemySpeedFactor ?? 1;
       }
-      e.dist += e.speed * e.slowFactor * e.boostFactor * tileFactor * TILE * dt;
+      if (e.frozen <= 0) e.dist += e.speed * e.slowFactor * e.boostFactor * tileFactor * TILE * dt;
       e.place();
       if (e.flash > 0) e.flash -= dt;
       this.applyTint(e);
@@ -725,6 +858,9 @@ export class BattleScene extends Phaser.Scene {
 
   private applyTint(e: Enemy): void {
     if (e.flash > 0) e.sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+    else if (e.frozen > 0) e.sprite.setTint(0x7dd3fc).setTintMode(Phaser.TintModes.MULTIPLY);
+    else if (e.poisonTimer > 0) e.sprite.setTint(0xa3e635).setTintMode(Phaser.TintModes.MULTIPLY);
+    else if (e.silenced > 0) e.sprite.setTint(0xf0abfc).setTintMode(Phaser.TintModes.MULTIPLY);
     else if (e.slowFactor < 1) e.sprite.setTint(0x9fdcff).setTintMode(Phaser.TintModes.MULTIPLY);
     else if (e.boostFactor > 1) e.sprite.setTint(0xffb38a).setTintMode(Phaser.TintModes.MULTIPLY);
     else e.sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
@@ -789,8 +925,29 @@ export class BattleScene extends Phaser.Scene {
     }
     if (mode === 'first') list.sort((a, b) => a.remaining - b.remaining);
     else if (mode === 'strong') list.sort((a, b) => b.hp + b.shield - (a.hp + a.shield));
-    else list.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y));
+    else if (mode === 'dense') {
+      // Gegner mit den meisten Nachbarn zuerst (für Flächenschaden)
+      const crowd = new Map(list.map((e) => [e, list.filter((o) => Math.hypot(o.x - e.x, o.y - e.y) <= TILE * 1.2).length]));
+      list.sort((a, b) => crowd.get(b)! - crowd.get(a)! || a.remaining - b.remaining);
+    } else list.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y));
     return list;
+  }
+
+  /** Schaden über Zeit (Gift, Wolken) – ohne Krit und Rüstung */
+  private dotDamage(e: Enemy, amount: number): void {
+    if (!e.alive || amount <= 0) return;
+    e.hp -= amount;
+    if (e.hp <= 0) this.killEnemy(e);
+  }
+
+  /** Aura-Bonus der Glockentürme für einen Turm (der stärkste zählt) */
+  private auraBonus(t: Tower): number {
+    let best = 0;
+    for (const b of this.towers) {
+      if (b === t || b.stats.aura <= 0 || b.disabled > 0) continue;
+      if (Math.hypot(b.x - t.x, b.y - t.y) <= b.stats.range) best = Math.max(best, b.stats.aura);
+    }
+    return best;
   }
 
   private updateTowers(dt: number): void {
@@ -800,10 +957,18 @@ export class BattleScene extends Phaser.Scene {
         if (t.disabled <= 0) t.setHacked(false);
         continue;
       }
-      // Mana füllt sich; bei vollem Mana Fähigkeit auslösen
-      t.mana = Math.min(t.stats.maxMana, t.mana + t.stats.manaRegen * dt);
-      if (t.mana >= t.stats.maxMana && this.phase === 'wave') this.castTowerAbility(t);
-      t.cooldown -= dt;
+      // Mana füllt sich während der Wellen; bei vollem Mana Fähigkeit auslösen
+      if (this.phase === 'wave') {
+        t.mana = Math.min(t.stats.maxMana, t.mana + t.stats.manaRegen * dt);
+        if (t.mana >= t.stats.maxMana) this.castTowerAbility(t);
+        // Kristallmine fördert alle 5 Sekunden
+        if (t.stats.crystalIncome > 0 && (t.incomeTimer += dt) >= 5) {
+          t.incomeTimer -= 5;
+          this.drops.spawn(t.x, t.y - 10, 'crystal', Math.round(t.stats.crystalIncome));
+        }
+      }
+      if (t.def.attack === 'none') continue;
+      t.cooldown -= dt * (1 + this.auraBonus(t) + (this.rallyTimer > 0 ? this.rallyBonus : 0));
       if (t.cooldown > 0) continue;
       const targets = this.findTargets(t.x, t.y, t.stats.range, t.def.targets, t.targetMode);
       if (targets.length === 0) continue;
@@ -813,13 +978,119 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Fähigkeit bei vollem Mana. PLATZHALTER: Die Wirkungen (siehe TowerDef.ability) folgen in einem späteren Schritt –
-   * aktuell wird nur der Name angezeigt und das Mana geleert.
-   */
+  /** Fähigkeit bei vollem Mana (Werte in data/towers.ts → ability, in der Toolbox änderbar). */
   private castTowerAbility(t: Tower): void {
-    t.mana = 0;
-    floatText(this, t.x, t.y - 34, t.def.ability.name, '#93c5fd', 15);
+    const refund = Math.min(0.9, this.mods.flat('abilityRefund'));
+    t.mana = this.rng.chance(refund) ? t.stats.maxMana * 0.5 : 0;
+    const a = t.def.ability;
+    const power = Math.max(0.1, 1 + this.mods.pct('abilityPower', t.def.tags));
+    const info = this.hitInfo(t);
+    const inRange = (targets = t.def.targets) => this.findTargets(t.x, t.y, t.stats.range, targets, t.targetMode);
+    let cast = true;
+    switch (a.type) {
+      case 'volley': {
+        const targets = inRange();
+        if (targets.length === 0) { cast = false; break; }
+        for (let i = 0; i < Math.round(a.arrows * power); i++) {
+          const target = targets[i % targets.length];
+          this.projectiles.push(new Projectile(this, t.x, t.y - 4 + (i % 3) * 6 - 6, target, t.stats.projectileSpeed, info, t.def.projectile.style, DEPTH.proj));
+        }
+        break;
+      }
+      case 'bigshot': {
+        const target = inRange()[0];
+        if (!target) { cast = false; break; }
+        const big = { ...info, physDamage: info.physDamage * a.damageMul * power, splash: info.splash * a.radiusMul };
+        const p = new Projectile(this, t.x, t.y, target, t.stats.projectileSpeed * 0.8, big, t.def.projectile.style, DEPTH.proj);
+        p.sprite.setScale(2.2);
+        this.projectiles.push(p);
+        break;
+      }
+      case 'storm': {
+        const first = inRange()[0];
+        if (!first) { cast = false; break; }
+        this.chainLightning(t, first, { ...info, magicDamage: info.magicDamage * power }, a.targets, 1);
+        break;
+      }
+      case 'freeze': {
+        const targets = inRange();
+        if (targets.length === 0) { cast = false; break; }
+        for (const e of targets) e.frozen = Math.max(e.frozen, a.duration * power * (e.def.boss ? 0.5 : 1));
+        this.ringFx(t.x, t.y, 0x7dd3fc, t.stats.range / 60);
+        break;
+      }
+      case 'pierce': {
+        const first = inRange()[0];
+        if (!first) { cast = false; break; }
+        // Linie vom Turm über das Ziel hinaus
+        const ang = Math.atan2(first.y - t.y, first.x - t.x);
+        const len = t.stats.range * 1.6;
+        const end = { x: t.x + Math.cos(ang) * len, y: t.y + Math.sin(ang) * len };
+        for (const e of this.enemies) {
+          if (e.alive && (e.flying ? t.def.targets.air : t.def.targets.ground) && distToSegment(e, t, end) <= 30) {
+            this.damageEnemy(e, { ...info, physDamage: info.physDamage * a.damageMul * power });
+          }
+        }
+        this.beams.push({ points: [{ x: t.x, y: t.y }, end], color: 0xfdba74, t: 0.3, width: 5 });
+        break;
+      }
+      case 'poisonCloud': {
+        const target = this.findTargets(t.x, t.y, t.stats.range, t.def.targets, 'dense')[0];
+        if (!target) { cast = false; break; }
+        this.clouds.push({ x: target.x, y: target.y, radius: a.radius * TILE, dps: a.dps * power, t: a.duration, tick: 0 });
+        break;
+      }
+      case 'rockRain': {
+        const targets = inRange();
+        if (targets.length === 0) { cast = false; break; }
+        for (let i = 0; i < a.rocks; i++) {
+          const e = this.rng.pick(targets);
+          this.strikes.push({ t: 0.3 + i * 0.2, x: e.x, y: e.y, damage: info.physDamage * a.damageMul * power, radius: Math.max(info.splash, TILE * 0.8) });
+          const rock = this.add.image(e.x, e.y - 220, 'proj_rock').setDepth(DEPTH.fx).setScale(1.6);
+          this.tweens.add({ targets: rock, y: e.y, duration: 300 + i * 200, ease: 'Quad.easeIn', onComplete: () => rock.destroy() });
+        }
+        break;
+      }
+      case 'rally':
+        this.rallyBonus = a.attackSpeed * power;
+        this.rallyTimer = a.duration;
+        for (const o of this.towers) if (o.def.attack !== 'none') this.ringFx(o.x, o.y, 0xfacc15, 0.5);
+        break;
+      case 'caravan':
+        for (let i = 0; i < Math.round(a.civilians * power); i++) this.civilians.push(new Civilian(this, t, true, DEPTH.ground + 2));
+        break;
+      case 'motherlode':
+        this.drops.spawn(t.x, t.y - 10, 'crystal', Math.round(a.crystals * power));
+        break;
+      case 'banish': {
+        const targets = this.findTargets(t.x, t.y, t.stats.range, { ground: true, air: true }, 'first');
+        for (const e of targets) {
+          e.shield = 0;
+          e.silenced = Math.max(e.silenced, a.duration * power);
+        }
+        this.ringFx(t.x, t.y, 0xf0abfc, t.stats.range / 60);
+        break;
+      }
+      case 'tornado': {
+        const targets = this.findTargets(t.x, t.y, t.stats.range, { ground: true, air: true }, 'first');
+        for (const e of targets) {
+          if (e.def.flying) e.grounded = Math.max(e.grounded, a.duration * power);
+          else this.knockBack(e, a.knockback * TILE * power);
+        }
+        this.ringFx(t.x, t.y, 0x7dd3fc, t.stats.range / 60);
+        break;
+      }
+    }
+    if (!cast) {
+      t.mana = t.stats.maxMana; // nichts in Reichweite: Mana bleibt voll
+      return;
+    }
+    floatText(this, t.x, t.y - 34, a.name, '#93c5fd', 15);
+  }
+
+  private knockBack(e: Enemy, px: number): void {
+    e.dist = Math.max(0, e.dist - px * (e.def.boss ? 0.3 : 1));
+    e.place();
   }
 
   private hitInfo(t: Tower): HitInfo {
@@ -834,6 +1105,10 @@ export class BattleScene extends Phaser.Scene {
       splash: s.splash,
       slowStrength: s.slowStrength,
       slowDuration: s.slowDuration,
+      poisonDps: s.poisonDps,
+      poisonDuration: s.poisonDuration,
+      knockback: s.knockback,
+      silence: s.silence,
     };
   }
 
@@ -851,10 +1126,10 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private chainLightning(t: Tower, first: Enemy, info: HitInfo): void {
+  private chainLightning(t: Tower, first: Enemy, info: HitInfo, jumps = t.stats.chain, falloffStep = 0.75): void {
     const hit: Enemy[] = [first];
     let current = first;
-    for (let i = 0; i < t.stats.chain; i++) {
+    for (let i = 0; i < jumps; i++) {
       const next = this.enemies
         .filter((e) => e.alive && !e.flying && !hit.includes(e) && Math.hypot(e.x - current.x, e.y - current.y) <= TILE * 1.6)
         .sort((a, b) => Math.hypot(a.x - current.x, a.y - current.y) - Math.hypot(b.x - current.x, b.y - current.y))[0];
@@ -867,7 +1142,7 @@ export class BattleScene extends Phaser.Scene {
     for (const e of hit) {
       pts.push({ x: e.x, y: e.y });
       this.damageEnemy(e, { ...info, physDamage: info.physDamage * falloff, magicDamage: info.magicDamage * falloff });
-      falloff *= 0.75;
+      falloff *= falloffStep;
     }
     for (let i = 1; i < pts.length; i++) {
       this.beams.push({ points: zigzag(pts[i - 1], pts[i], this.rng), color: 0xd8b4fe, t: 0.14, width: 3 });
@@ -976,8 +1251,7 @@ export class BattleScene extends Phaser.Scene {
     const cells: GridPos[] = [];
     for (let row = 0; row < ROWS; row++) {
       for (let col = 0; col < COLS; col++) {
-        const reserved = this.kingTarget && this.kingTarget.col === col && this.kingTarget.row === row;
-        if (this.tileAt(col, row).harvest && !reserved) cells.push({ col, row });
+        if (this.tileAt(col, row).harvest && !this.isReserved(col, row)) cells.push({ col, row });
       }
     }
     if (cells.length === 0) return;
@@ -987,10 +1261,113 @@ export class BattleScene extends Phaser.Scene {
     this.harvestCell(cell);
   }
 
+  /** Ist das Feld schon Ziel des Königs oder eines Zivilisten? */
+  private isReserved(col: number, row: number, except?: Civilian): boolean {
+    if (this.kingTarget && this.kingTarget.col === col && this.kingTarget.row === row) return true;
+    return this.civilians.some((c) => c !== except && c.target?.col === col && c.target.row === row);
+  }
+
+  // ================================================================ Zivilisten (Rift-Sammler)
+
+  /** Zivilisten laufen während der Wellen zu Rohstoff-Feldern, bauen ab und kehren zurück. */
+  private updateCivilians(dt: number): void {
+    // Anzahl der festen Zivilisten an die Turmwerte anpassen
+    for (const t of this.towers) {
+      if (t.stats.gatherers <= 0) continue;
+      const own = this.civilians.filter((c) => c.home === t && !c.temporary);
+      for (let i = own.length; i < Math.floor(t.stats.gatherers); i++) this.civilians.push(new Civilian(this, t, false, DEPTH.ground + 2));
+    }
+    if (this.phase !== 'wave') return;
+    const speed = BALANCE.civilianSpeed * TILE * Math.max(0.2, 1 + this.mods.pct('gatherSpeed'));
+    const harvestTime = BALANCE.civilianHarvestSeconds / Math.max(0.2, 1 + this.mods.pct('gatherSpeed'));
+    for (const c of this.civilians) {
+      if (c.state === 'idle') {
+        const cell = this.nearestHarvestCell(c);
+        if (!cell) continue;
+        c.target = cell;
+        c.state = 'walking';
+      }
+      if (c.state === 'walking' && c.target) {
+        if (!this.tileAt(c.target.col, c.target.row).harvest) {
+          c.state = 'idle'; // jemand anderes war schneller
+          c.target = null;
+          continue;
+        }
+        const goal = this.cellCenter(c.target);
+        if (this.stepCivilian(c, goal.x, goal.y + 10, speed * dt)) {
+          c.state = 'harvesting';
+          c.timer = harvestTime;
+        }
+      } else if (c.state === 'harvesting' && c.target) {
+        c.timer -= dt;
+        c.sprite.setAngle(Math.sin(this.time.now / 80) * 12);
+        if (c.timer <= 0) {
+          c.sprite.setAngle(0);
+          if (this.tileAt(c.target.col, c.target.row).harvest) this.harvestCell(c.target);
+          c.target = null;
+          c.state = 'returning';
+        }
+      } else if (c.state === 'returning') {
+        if (this.stepCivilian(c, c.home.x, c.home.y + 16, speed * dt)) c.state = 'idle';
+      }
+    }
+  }
+
+  private stepCivilian(c: Civilian, x: number, y: number, maxStep: number): boolean {
+    const dx = x - c.x;
+    const dy = y - c.y;
+    const d = Math.hypot(dx, dy);
+    if (d <= maxStep) {
+      c.x = x;
+      c.y = y;
+    } else {
+      c.x += (dx / d) * maxStep;
+      c.y += (dy / d) * maxStep;
+      if (Math.abs(dx) > 1) c.sprite.setFlipX(dx < 0);
+    }
+    c.sprite.setPosition(c.x, c.y + Math.sin(this.time.now / 100 + c.x) * 1.5);
+    return d <= maxStep;
+  }
+
+  private nearestHarvestCell(c: Civilian): GridPos | null {
+    let best: GridPos | null = null;
+    let bestD = Infinity;
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        if (!this.tileAt(col, row).harvest || this.isReserved(col, row, c)) continue;
+        const p = this.cellCenter({ col, row });
+        const d = Math.hypot(p.x - c.home.x, p.y - c.home.y);
+        if (d < bestD) {
+          bestD = d;
+          best = { col, row };
+        }
+      }
+    }
+    return best;
+  }
+
+  private removeCivilians(pred: (c: Civilian) => boolean): void {
+    for (const c of this.civilians) if (pred(c)) c.destroy();
+    this.civilians = this.civilians.filter((c) => !pred(c));
+  }
+
+  /** Giftwolken: Schaden an Bodengegnern im Kreis */
+  private updateClouds(dt: number): void {
+    for (const cl of this.clouds) {
+      cl.t -= dt;
+      for (const e of this.enemies) {
+        if (e.alive && !e.flying && Math.hypot(e.x - cl.x, e.y - cl.y) <= cl.radius) this.dotDamage(e, cl.dps * dt);
+      }
+    }
+    this.clouds = this.clouds.filter((cl) => cl.t > 0);
+  }
+
+  /** Beute fliegt zur Anzeige – die liegt auf dem Bildschirm, die Beute in der Welt. */
   private dropTarget(kind: DropKind): Vec {
-    if (kind === 'crystal') return { x: 232, y: 36 };
+    const cam = this.cameras.main;
+    if (kind === 'crystal') return { x: 232 + cam.scrollX, y: 36 + cam.scrollY };
     const i = RESOURCE_IDS.indexOf(kind);
-    return { x: LOOT_PANEL.x + 18, y: LOOT_PANEL.y + 34 + i * LOOT_PANEL.row };
+    return { x: LOOT_PANEL.x + 18 + cam.scrollX, y: LOOT_PANEL.y + 34 + i * LOOT_PANEL.row + cam.scrollY };
   }
 
   private creditDrop(kind: DropKind, amount: number): void {
@@ -1024,14 +1401,33 @@ export class BattleScene extends Phaser.Scene {
     const info = p.hit;
     if (info.splash > 0) {
       for (const e of this.enemies) {
-        if (e.alive && !e.flying && Math.hypot(e.x - p.tx, e.y - p.ty) <= info.splash) this.damageEnemy(e, info);
+        if (e.alive && !e.flying && Math.hypot(e.x - p.tx, e.y - p.ty) <= info.splash) {
+          this.applyEffects(e, info);
+          this.damageEnemy(e, info);
+        }
       }
       this.burstFx(p.tx, p.ty, 0xf59e0b, info.splash / 30);
     } else if (p.target?.alive) {
+      this.applyEffects(p.target, info);
       this.damageEnemy(p.target, info);
       if (info.slowStrength > 0) this.applySlow(p.target, info.slowStrength, info.slowDuration);
     }
     p.destroy();
+  }
+
+  /** Gift, Rückstoß und Bann eines Treffers */
+  private applyEffects(e: Enemy, info: HitInfo): void {
+    if (!e.alive) return;
+    if (info.poisonDps && info.poisonDuration) {
+      // Gift stapelt sich bis zu einer Obergrenze
+      e.poisonDps = Math.min(info.poisonDps * BALANCE.poisonMaxStacks, e.poisonDps + info.poisonDps);
+      e.poisonTimer = Math.max(e.poisonTimer, info.poisonDuration);
+    }
+    if (info.knockback) this.knockBack(e, info.knockback);
+    if (info.silence) {
+      e.shield = 0;
+      e.silenced = Math.max(e.silenced, info.silence);
+    }
   }
 
   private applySlow(e: Enemy, strength: number, duration: number): void {
@@ -1062,13 +1458,23 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private killEnemy(e: Enemy): void {
-    const crystals = Math.round(e.def.crystals * Math.max(0, 1 + this.mods.pct('crystalGain')));
+    if (!e.alive) return;
+    const crystals = Math.round(e.def.crystals * Math.max(0, 1 + this.mods.pct('crystalGain')) + this.mods.flat('crystalsPerKill'));
     this.kills++;
     this.drops.spawn(e.x, e.y, 'crystal', crystals);
-    // Beute für die Stadt: manchmal Gold, Spezialgegner und Bosse bringen Ressourcen
+    // Beute für die Stadt: manchmal Gold, Spezialgegner und Bosse bringen Ressourcen.
+    // Glück erhöht die Chance auf Gold und seltene Funde.
     const lootMul = Math.max(0, 1 + this.mods.pct('lootGain'));
-    if (this.rng.chance(BALANCE.goldDropChance + this.mods.flat('goldDropChance'))) {
+    const luck = this.luck();
+    const goldChance = (BALANCE.goldDropChance + this.mods.flat('goldDropChance')) * (1 + luck * BALANCE.luckDropBonus);
+    if (this.rng.chance(goldChance)) {
       this.drops.spawn(e.x + 8, e.y, 'gold', Math.max(1, Math.round((e.def.crystals / BALANCE.goldDropDivisor) * lootMul)));
+    }
+    const rareChance = BALANCE.rareDropBase + luck * BALANCE.rareDropPerLuck + this.mods.flat('rareDropChance');
+    if (this.rng.chance(rareChance)) {
+      this.drops.spawn(e.x, e.y - 10, 'magie', Math.max(1, Math.round(2 * lootMul)));
+      this.drops.spawn(e.x + 12, e.y - 10, 'gold', Math.max(2, Math.round((e.def.crystals / 2) * lootMul)));
+      floatText(this, e.x, e.y - 34, 'Seltener Fund!', '#4ade80', 16);
     }
     for (const id of RESOURCE_IDS) {
       const v = e.def.loot?.[id];
@@ -1260,6 +1666,13 @@ export class BattleScene extends Phaser.Scene {
 
     const fx = this.fxGfx;
     fx.clear();
+    for (const cl of this.clouds) {
+      const a = Math.min(1, cl.t) * 0.35;
+      fx.fillStyle(0x84cc16, a);
+      fx.fillCircle(cl.x, cl.y, cl.radius);
+      fx.fillStyle(0xbef264, a * 0.8);
+      fx.fillCircle(cl.x + Math.sin(this.time.now / 300) * 10, cl.y + Math.cos(this.time.now / 370) * 8, cl.radius * 0.55);
+    }
     for (const b of this.beams) {
       b.t -= dt;
       fx.lineStyle(b.width, b.color, Math.min(1, b.t * 6));
@@ -1272,7 +1685,8 @@ export class BattleScene extends Phaser.Scene {
     if (this.abilityTargeting) {
       const p = this.input.activePointer;
       fx.lineStyle(3, 0xfacc15, 0.8);
-      fx.strokeCircle(p.x, p.y, KING.ability.radius * TILE);
+      const w = this.toWorld(p.x, p.y);
+      fx.strokeCircle(w.x, w.y, KING.ability.radius * TILE);
     }
   }
 
@@ -1294,6 +1708,7 @@ export class BattleScene extends Phaser.Scene {
     root.setScale(0.6).setAlpha(0);
     this.tweens.add({ targets: root, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut' });
     this.tweens.add({ targets: root, alpha: 0, delay: 1400, duration: 400, onComplete: () => root.destroy() });
+    pin(root);
   }
 
   // ================================================================ Tutorial (nur Nacht 1)
@@ -1310,11 +1725,11 @@ export class BattleScene extends Phaser.Scene {
     this.tutorialBox = null;
     const text = BattleScene.TUTORIAL[this.tutorialStep];
     if (this.tutorialStep < 0 || !text) return;
-    const box = this.add.container(MAP_X + (COLS * TILE) / 2, GAME_HEIGHT - 52).setDepth(DEPTH.menu - 1);
-    const label = addText(this, 0, 0, text, 20, { origin: [0.5, 0.5], align: 'center' });
+    const box = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT - 52).setDepth(DEPTH.menu - 1);
+    const label = addText(this, 0, 0, text, 20, { origin: [0.5, 0.5], align: 'center', wrap: 1000 });
     const bg = this.add.rectangle(0, 0, label.width + 40, label.height + 20, 0x000000, 0.75).setStrokeStyle(2, 0xfacc15);
     box.add([bg, label]);
-    this.tutorialBox = box;
+    this.tutorialBox = pin(box);
   }
 
   private advanceTutorial(): void {
@@ -1344,4 +1759,13 @@ function zigzag(a: Vec, b: Vec, rng: Rng): Vec[] {
   }
   pts.push({ x: b.x, y: b.y });
   return pts;
+}
+
+/** Abstand eines Punktes zu einer Strecke a–b. */
+function distToSegment(p: Vec, a: Vec, b: Vec): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
 }

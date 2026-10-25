@@ -23,9 +23,17 @@
 - [x] Turm-Werte: normaler/magischer Schaden, Crit Chance/DMG, Mana, Mana-Regeneration, Turmfenster
 - [x] Toolbox (`editor.html`): Werte aller Bereiche und Grafiken ändern, Export als `mod.json`
 
-## Als Nächstes (Vorschläge)
+## Erledigt (v0.4 – großes Inhalts-Update)
 
-0. **Turm-Fähigkeiten** wirken lassen (bisher nur Name bei vollem Mana)
+- [x] 7 neue Türme (Gift, Katapult, Glocke, Rift-Sammler, Kristallmine, Bann, Wind) und Fähigkeiten für alle 12 Türme
+- [x] Passive Türme: Aura, Zivilisten sammeln Rohstoffe, Kristall-Förderung
+- [x] Glück-System: seltenere Karten, Gold-Beute, seltene Funde; 47 Upgrade-Karten
+- [x] 10 neue Gebäude, mehr Upgrades, Entweder-oder-Gebäude
+- [x] 26 Bauplätze in der Stadt
+- [x] Größere Karte (28 × 13) ohne sichtbares Raster, längere Wege, Karte mit dem Finger verschieben
+- [x] Forschungsbaum (Universität) und Magiebaum (Magiergilde)
+
+## Als Nächstes (Vorschläge)
 
 1. **Selbst spielen und Balancing anpassen** – Zahlen in `src/config.ts` und `src/data/*`.
    Wichtig nach v0.2: Die Schwierigkeit späterer Nächte an Turm-Limits und Stadt-Fortschritt anpassen

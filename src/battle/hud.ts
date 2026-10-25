@@ -4,7 +4,7 @@ import type { WaveDef } from '../core/wavegen';
 import { RESOURCE_IDS } from '../core/types';
 import { getEnemy } from '../data/enemies';
 import { RESOURCES, RIFT_CRYSTAL } from '../data/resources';
-import { Button, COLORS, addText, drawPanel } from '../ui/widgets';
+import { Button, COLORS, addText, drawPanel, pin } from '../ui/widgets';
 import { DEPTH, type BattleScene } from './BattleScene';
 
 // Obere Leiste im Kampf: Nacht, Rift-Kristalle, Tor-Leben, Welle, Vorschau und Knöpfe.
@@ -24,12 +24,14 @@ export class Hud {
   private readonly abilityGfx: Phaser.GameObjects.Graphics;
   private readonly abilityText: Phaser.GameObjects.Text;
   private readonly targetHint: Phaser.GameObjects.Text;
+  private readonly luckText: Phaser.GameObjects.Text;
   private preview: Phaser.GameObjects.Container;
   private last = '';
 
   constructor(private readonly scene: BattleScene) {
     const s = scene;
     const d = DEPTH.hud;
+    const before = new Set(s.children.list);
     const g = s.add.graphics().setDepth(d);
     g.fillStyle(0x0b0d1a, 0.96);
     g.fillRect(0, 0, GAME_WIDTH, HUD_HEIGHT);
@@ -52,6 +54,12 @@ export class Hud {
       s.add.image(lp.x + 18, y, RESOURCES[id].icon).setScale(0.5).setDepth(d);
       this.lootTexts.push(addText(s, lp.x + 36, y, '0', 17, { origin: [0, 0.5] }).setDepth(d));
     });
+    // Glück: bestimmt seltene Karten und Beute
+    const ly = lp.y + 34 + RESOURCE_IDS.length * lp.row + 8;
+    const lg = s.add.graphics().setDepth(d);
+    drawPanel(lg, lp.x, ly - 16, lp.w, 32, { radius: 10, borderWidth: 2, alpha: 0.88 });
+    s.add.image(lp.x + 18, ly, 'icon_clover').setScale(0.5).setDepth(d);
+    this.luckText = addText(s, lp.x + 36, ly, '0', 17, { origin: [0, 0.5], color: '#4ade80' }).setDepth(d);
     s.add.image(372, 36, 'icon_heart').setDepth(d).setScale(0.75);
     this.gateText = addText(s, 393, 36, '', 24, { origin: [0, 0.5] }).setDepth(d);
     s.add.image(508, 36, 'icon_skull').setDepth(d).setScale(0.65);
@@ -73,14 +81,17 @@ export class Hud {
     this.targetHint = addText(s, 640, 110, 'Tippe auf die Karte: Dort schlägt der Pfeilhagel ein!', 22, {
       origin: [0.5, 0.5], color: COLORS.gold, stroke: true,
     }).setDepth(DEPTH.menu).setVisible(false);
+    // Die Leiste bleibt beim Verschieben der Karte stehen
+    for (const obj of s.children.list) if (!before.has(obj)) pin(obj);
   }
 
   refresh(): void {
     const s = this.scene;
-    const key = [s.crystals, ...RESOURCE_IDS.map((id) => s.loot[id]), s.gateHp, s.gateMaxHp, s.waveIndex, s.phase, s.speed, Math.ceil(s.abilityCooldown), s.abilityTargeting].join('|');
+    const key = [s.crystals, s.luck(), ...RESOURCE_IDS.map((id) => s.loot[id]), s.gateHp, s.gateMaxHp, s.waveIndex, s.phase, s.speed, Math.ceil(s.abilityCooldown), s.abilityTargeting].join('|');
     if (key === this.last) return;
     this.last = key;
     this.crystalText.setText(String(s.crystals));
+    this.luckText.setText(`Glück ${Math.round(s.luck())}`);
     RESOURCE_IDS.forEach((id, i) => this.lootTexts[i].setText(String(s.loot[id])));
     this.gateText.setText(`${s.gateHp}/${s.gateMaxHp}`);
     this.gateText.setColor(s.gateHp <= s.gateMaxHp * 0.3 ? COLORS.bad : COLORS.text);
@@ -109,7 +120,7 @@ export class Hud {
   setPreview(wave: WaveDef | undefined): void {
     const s = this.scene;
     this.preview.destroy();
-    this.preview = s.add.container(0, 0).setDepth(DEPTH.hud);
+    this.preview = pin(s.add.container(0, 0).setDepth(DEPTH.hud));
     if (!wave) return;
     const counts = new Map<string, number>();
     for (const g of wave.groups) counts.set(g.enemyId, (counts.get(g.enemyId) ?? 0) + g.count);
@@ -125,6 +136,7 @@ export class Hud {
       this.preview.add(addText(s, x + 20, 46, `×${n}`, 16, { origin: [0, 0.5] }));
       x += 82;
     }
+    pin(this.preview);
   }
 }
 

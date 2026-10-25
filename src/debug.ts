@@ -22,17 +22,18 @@ export function installDebug(game: Phaser.Game): void {
     /** Findet einen sichtbaren Knopf nach Beschriftung und gibt seine Bildschirm-Position zurück */
     button: (label: string) => {
       const found: { x: number; y: number; enabled: boolean }[] = [];
-      const visit = (list: Phaser.GameObjects.GameObject[]) => {
+      const visit = (list: Phaser.GameObjects.GameObject[], cam: Phaser.Cameras.Scene2D.Camera) => {
         for (const o of list) {
           if (o instanceof Button && o.visible && o.labelText.includes(label)) {
+            // Knöpfe in der Welt (Kampfmenüs) verschieben sich mit der Kamera, angeheftete nicht
             const m = o.getWorldTransformMatrix();
-            found.push({ x: m.tx, y: m.ty, enabled: o.isEnabled() });
+            found.push({ x: m.tx - cam.scrollX * o.scrollFactorX, y: m.ty - cam.scrollY * o.scrollFactorY, enabled: o.isEnabled() });
           }
           const children = (o as Phaser.GameObjects.Container).list;
-          if (Array.isArray(children)) visit(children);
+          if (Array.isArray(children)) visit(children, cam);
         }
       };
-      for (const s of game.scene.getScenes(true)) visit(s.children.list);
+      for (const s of game.scene.getScenes(true)) visit(s.children.list, s.cameras.main);
       return found.find((b) => b.enabled) ?? found[0] ?? null;
     },
     /** Wechselt direkt in eine Szene, z. B. rift.go('Battle', { night: 2 }) */

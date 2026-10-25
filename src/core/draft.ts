@@ -4,13 +4,22 @@ import type { TowerTag } from './types';
 
 // Zieht Upgrade-Karten. "Glück" verschiebt die Chancen hin zu selteneren Karten.
 
+/** Glück in Punkten (Glücksbrunnen, Orakel, Karten, Magiebaum): je Punkt seltenere Karten wahrscheinlicher. */
 export function rarityWeights(luck: number): Record<Rarity, number> {
+  const l = Math.max(0, luck);
   return {
-    common: Math.max(10, RARITIES.common.weight - luck * 8),
-    rare: RARITIES.rare.weight + luck * 4,
-    epic: RARITIES.epic.weight + luck * 3,
-    legendary: RARITIES.legendary.weight + luck * 1,
+    common: Math.max(10, RARITIES.common.weight - l * 3),
+    rare: RARITIES.rare.weight + l * 1.5,
+    epic: RARITIES.epic.weight + l * 1,
+    legendary: RARITIES.legendary.weight + l * 0.5,
   };
+}
+
+/** Chance (0–1) auf eine Seltenheit bei gegebenem Glück – für die Anzeige. */
+export function rarityChance(luck: number, rarity: Rarity): number {
+  const w = rarityWeights(luck);
+  const total = RARITY_ORDER.reduce((sum, r) => sum + w[r], 0);
+  return w[rarity] / total;
 }
 
 /** Kann diese Karte noch gewählt werden? */

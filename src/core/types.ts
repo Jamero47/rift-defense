@@ -32,7 +32,11 @@ export function isEmptyResources(r: Partial<Resources>): boolean {
   return RESOURCE_IDS.every((id) => !r[id]);
 }
 
-export type TowerTag = 'projectile' | 'magic' | 'bow' | 'cannon' | 'mage' | 'frost' | 'antiair';
+export type TowerTag =
+  | 'projectile' | 'magic' | 'bow' | 'cannon' | 'mage' | 'frost' | 'antiair'
+  | 'poison' | 'catapult' | 'bell' | 'gatherer' | 'mine' | 'banner' | 'wind'
+  /** Rollen: Unterstützung, Wirtschaft, Kontrolle */
+  | 'support' | 'economy' | 'control';
 
 /** Alle Werte, die durch Karten, Gebäude, Felder oder Rifts verändert werden können. */
 export type StatKey =
@@ -56,13 +60,26 @@ export type StatKey =
   | 'towerCost'
   | 'towerLimit'
   | 'towerMaxLevel'
+  | 'poisonDamage'
+  | 'knockback'
+  | 'auraStrength'
+  | 'gatherers'
+  | 'gatherSpeed'
+  | 'mineIncome'
+  | 'abilityRefund'
+  | 'startMana'
+  | 'abilityPower'
   // Wirtschaft & Tor (im Kampf)
   | 'crystalGain'
   | 'startCrystals'
   | 'gateMaxHp'
+  | 'gateRegen'
   | 'interest'
+  | 'crystalsPerKill'
   // Beute für die Stadt
   | 'goldDropChance'
+  | 'rareDropChance'
+  | 'luck'
   | 'lootGain'
   | 'harvestYield'
   | 'autoHarvest'
@@ -80,8 +97,10 @@ export type StatKey =
   | 'kingMoveSpeed'
   | 'kingHarvestSpeed'
   // Karten
-  | 'cardLuck'
-  | 'cardRerolls';
+  | 'cardRerolls'
+  | 'startCards'
+  // Stadt
+  | 'buildTime';
 
 /**
  * Ein Modifikator verändert einen Wert.

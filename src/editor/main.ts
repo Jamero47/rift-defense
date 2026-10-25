@@ -37,7 +37,7 @@ const SECTIONS: SectionDef[] = [
   { id: 'balance', group: 'Nacht-Sphäre', title: 'Balancing', intro: 'Schwierigkeit, Startwerte, Beute, Werbung.' },
   { id: 'buildings', group: 'Tag-Sphäre', title: 'Gebäude', intro: 'Bau- und Ausbaukosten, Ertrag und Verbesserungen.', itemName: (b) => String(b.name) },
   { id: 'plots', group: 'Tag-Sphäre', title: 'Bauplätze', intro: 'Lage in der Stadt und Freischaltung (Gold oder Thronsaal-Stufe).', itemName: (p) => plotName(p as unknown as PlotDef) },
-  { id: 'research', group: 'Tag-Sphäre', title: 'Forschung', intro: 'Forschungen in der Universität.', itemName: (r) => String(r.name) },
+  { id: 'research', group: 'Tag-Sphäre', title: 'Forschung', intro: 'Forschungsbaum (Universität) und Magiebaum (Magiergilde). Spalte/Zeile = Lage im Baum.', itemName: (r) => String(r.name) },
   { id: 'story', group: 'Tag-Sphäre', title: 'Story-Nächte', intro: 'Texte und Nacht der Story-Kämpfe.', itemName: (s) => `Nacht ${s.night}: ${s.title}` },
   { id: 'city', group: 'Tag-Sphäre', title: 'Stadt-Einstellungen', intro: 'Bauzeit und Startressourcen eines neuen Spiels.' },
   { id: 'graphics', group: 'Grafik', title: 'Grafiken', intro: '' },

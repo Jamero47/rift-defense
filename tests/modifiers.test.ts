@@ -29,3 +29,12 @@ describe('Modifikatoren', () => {
     expect(describeModifier({ stat: 'projectiles', kind: 'flat', value: 1 })).toBe('+1 Projektil(e)');
   });
 });
+
+describe('Glück', () => {
+  it('macht seltene Karten wahrscheinlicher', async () => {
+    const { rarityChance } = await import('../src/core/draft');
+    expect(rarityChance(5, 'legendary')).toBeGreaterThan(rarityChance(0, 'legendary'));
+    expect(rarityChance(5, 'common')).toBeLessThan(rarityChance(0, 'common'));
+    expect(rarityChance(1000, 'common')).toBeGreaterThan(0);
+  });
+});

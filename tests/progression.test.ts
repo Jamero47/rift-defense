@@ -94,7 +94,8 @@ describe('Spielstand', () => {
 
   it('wandelt Spielstände der Version 1 um', () => {
     const s = migrateSave({ version: 1, night: 5, resources: { holz: 500, metall: 200, kristall: 30 }, buildings: { holzfaeller: 3 } });
-    expect(s.version).toBe(2);
+    expect(s.version).toBe(3);
+    expect(s.city.magicJob).toBeNull();
     expect(s.night).toBe(5);
     expect(s.resources.holz).toBe(500);
     expect(s.resources.stein).toBe(200);

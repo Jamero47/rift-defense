@@ -19,7 +19,7 @@ export const STORY_NIGHTS: readonly StoryNight[] = [
     riftId: 'tech',
     title: 'Der entführte Hofmagier',
     intro: 'Roboter aus dem Rift haben den Hofmagier verschleppt! Besiege den Mech-Titan, um ihn zu befreien.',
-    outro: 'Der Hofmagier ist frei! Zum Dank gründet er in deiner Stadt eine Magierakademie.',
+    outro: 'Der Hofmagier ist frei! Zum Dank gründet er in deiner Stadt eine Magiergilde.',
     unlocksBuilding: 'akademie',
   },
 ];

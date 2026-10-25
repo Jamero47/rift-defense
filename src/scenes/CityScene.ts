@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
-import { CITY, GAME_HEIGHT, GAME_WIDTH } from '../config';
+import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { hex } from '../battle/hud';
 import {
   buildingLevel, buildingUnlockText, buildingsForPlot, buyPlot, buyUpgrade, canBuild, canBuyPlot, canBuyUpgrade,
   canStartNight, canStartResearch, canUpgradeBuilding, cityModifiers, cityTutorialHint, completeJobs, isPlotUnlocked,
-  jobProgress, levelCost, plotUnlockText, researchStatus, startBuild, startResearch, startUpgradeBuilding,
-  throneLevel, unlockedTowers, upgradeRank,
+  jobDuration, jobProgress, levelCost, plotUnlockText, researchJob, researchStatus, rivals, startBuild, startResearch,
+  startUpgradeBuilding, throneLevel, unlockedTowers, upgradeRank,
 } from '../core/city';
 import { Modifiers, describeModifiersCompact, scaleModifiers } from '../core/modifiers';
 import { pathCountForNight, riftForNight } from '../core/progression';
@@ -16,7 +16,7 @@ import { wavesForNight } from '../core/wavegen';
 import { getBuilding, type BuildingDef } from '../data/buildings';
 import { PLOTS, PLOT_KIND_LABELS, PLOT_SIZE, getPlot, type PlotDef } from '../data/city';
 import { getEnemy } from '../data/enemies';
-import { RESEARCH } from '../data/research';
+import { RESEARCH, RESEARCH_TREES, getResearch, type ResearchDef, type ResearchTree } from '../data/research';
 import { RESOURCES } from '../data/resources';
 import { storyForNight } from '../data/story';
 import { getTower } from '../data/towers';
@@ -99,7 +99,8 @@ export class CityScene extends Phaser.Scene {
   private finishJobs(announce: boolean): void {
     const city = saveStore.get().city;
     const now = Date.now();
-    if (!(city.job && city.job.finishAt <= now) && !(city.researchJob && city.researchJob.finishAt <= now)) return;
+    const due = [city.job, city.researchJob, city.magicJob].some((j) => j && j.finishAt <= now);
+    if (!due) return;
     let messages: string[] = [];
     saveStore.update((d) => (messages = completeJobs(d, now)));
     if (!announce) return;
@@ -144,7 +145,7 @@ export class CityScene extends Phaser.Scene {
     g.lineBetween(900, 413, GAME_WIDTH, 413);
 
     // Bäume außerhalb der Mauer (Deko)
-    for (const [x, y] of [[960, 120], [1120, 110], [1240, 160], [960, 650], [1100, 660], [1250, 650], [1250, 470]]) {
+    for (const [x, y] of [[1255, 210], [1250, 600], [1160, 680], [930, 700], [1255, 440]]) {
       g.fillStyle(0x000000, 0.2);
       g.fillEllipse(x + 4, y + 16, 40, 12);
       g.fillStyle(0x2f6b2a, 1);
@@ -266,7 +267,7 @@ export class CityScene extends Phaser.Scene {
         const icon = this.add.image(0, small ? -2 : -16, def.icon).setAlpha(building ? 0.6 : 1);
         icon.setScale(Math.min(1.2, (small ? 40 : 52) / icon.width));
         c.add(icon);
-        if (!small) c.add(addText(this, 0, 20, building ? 'Baustelle' : def.name, 15, { origin: [0.5, 0.5], stroke: true }));
+        if (!small) c.add(addText(this, 0, 20, building ? 'Baustelle' : def.name, 15, { origin: [0.5, 0.5], stroke: true, fit: w - 8 }));
         if (state) {
           for (let i = 0; i < state.level; i++) {
             c.add(this.add.circle(-((state.level - 1) * 9) / 2 + i * 9, h / 2 - (small ? 8 : 12), 3.5, 0xfacc15).setStrokeStyle(1, 0x000000));
@@ -302,9 +303,10 @@ export class CityScene extends Phaser.Scene {
       g.fillRect(plot.x - bw / 2, plot.y + h / 2 + 4, bw * p, 7);
     };
     if (city.job?.plotId) bar(getPlot(city.job.plotId), jobProgress(city.job, now), 0xfacc15);
-    if (city.researchJob) {
-      const uni = Object.entries(city.plots).find(([, s]) => s.building === 'universitaet');
-      if (uni) bar(getPlot(uni[0]), jobProgress(city.researchJob, now), 0x60a5fa);
+    for (const tree of ['uni', 'magic'] as const) {
+      const job = researchJob(city, tree);
+      const home = Object.entries(city.plots).find(([, s]) => s.building === RESEARCH_TREES[tree].building);
+      if (job && home) bar(getPlot(home[0]), jobProgress(job, now), RESEARCH_TREES[tree].color);
     }
     // Tutorial-Hervorhebung
     const hg = this.highlightGfx;
@@ -471,25 +473,60 @@ export class CityScene extends Phaser.Scene {
   private openBuildChoice(plot: PlotDef): void {
     const save = saveStore.get();
     const options = buildingsForPlot(plot);
-    const h = Math.min(620, 90 + options.length * ROW_H + 10);
-    const p = this.openModal(1000, h, `${PLOT_KIND_LABELS[plot.kind]}: Was soll hier entstehen?`, () => this.openPlot(plot.id));
+    const cardH = 74;
+    const cols = options.length > 3 ? 2 : 1;
+    const colW = cols === 2 ? 575 : 760;
+    const w = cols * colW + (cols - 1) * 10 + 40;
+    const rowsN = Math.ceil(options.length / cols);
+    const h = 72 + rowsN * (cardH + 4) + 8;
+    const p = this.openModal(w, h, `${PLOT_KIND_LABELS[plot.kind]}: Was soll hier entstehen?`, () => this.openPlot(plot.id));
+    const seconds = Math.round(jobDuration(save.city) / 1000);
     options.forEach((def, i) => {
-      const check = canBuild(save, plot.id, def.id);
-      const locked = check.reason?.startsWith('Noch gesperrt');
-      const towers = def.unlocksTowers?.map((t) => getTower(t).name).join(', ');
-      this.row(p.root, 20, 70 + i * ROW_H, 960, {
-        icon: def.icon,
-        title: def.name,
-        description: towers ? `${def.description} (Türme: ${towers})` : def.description,
-        cost: locked ? undefined : def.levels[0],
-        reason: check.ok ? undefined : locked ? buildingUnlockText(def) : check.reason,
-        dim: locked,
-        button: locked ? undefined : {
-          label: `Bauen (${CITY.buildSeconds} s)`, enabled: check.ok,
-          onClick: () => this.act((d) => startBuild(d, plot.id, def.id, Date.now()), true),
-        },
-      });
+      const x = 20 + (i % cols) * (colW + 10);
+      const y = 64 + Math.floor(i / cols) * (cardH + 4);
+      this.buildCard(p.root, x, y, colW, cardH, plot, def, seconds);
     });
+  }
+
+  /** Kompakte Karte in der Bauauswahl: Symbol, Name, Text, Kosten und Knopf */
+  private buildCard(parent: Phaser.GameObjects.Container, x: number, y: number, w: number, h: number, plot: PlotDef, def: BuildingDef, seconds: number): void {
+    const save = saveStore.get();
+    const check = canBuild(save, plot.id, def.id);
+    const locked = !!check.reason?.startsWith('Noch gesperrt');
+    const rivalDefs = rivals(def);
+    const blocked = !!check.reason?.startsWith('Entweder-oder');
+    const g = this.add.graphics();
+    g.fillStyle(0x1f1b2b, locked ? 0.6 : 1);
+    g.fillRoundedRect(x, y, w, h, 10);
+    if (rivalDefs.length > 0) {
+      g.lineStyle(2, blocked ? 0xef4444 : 0xf59e0b, 0.8);
+      g.strokeRoundedRect(x, y, w, h, 10);
+    }
+    parent.add(g);
+    const icon = this.add.image(x + 34, y + h / 2, def.icon).setAlpha(locked ? 0.5 : 1);
+    icon.setScale(Math.min(1.1, 46 / Math.max(icon.width, icon.height)));
+    parent.add(icon);
+    const right = 150;
+    const textW = w - 66 - right - 6;
+    parent.add(addText(this, x + 66, y + 4, def.name, 16, { color: locked ? COLORS.muted : COLORS.text }));
+    const towers = def.unlocksTowers?.map((t) => getTower(t).name).join(', ');
+    let desc = towers ? `Türme: ${towers}. ${def.description.replace(/^Schaltet [^.:]*(:|\.)\s*/, '')}` : def.description;
+    if (rivalDefs.length > 0) desc += ` ⚔ Entweder-oder mit: ${rivalDefs.map((b) => b.name).join(', ')}`;
+    parent.add(addText(this, x + 66, y + 25, desc, 12, { bold: false, wrap: textW, color: locked ? COLORS.muted : COLORS.text }));
+    const rx = x + w - right;
+    if (locked) {
+      parent.add(addText(this, rx, y + 10, buildingUnlockText(def), 12, { color: COLORS.muted, wrap: right - 10 }));
+      parent.add(this.add.image(rx + right - 22, y + h - 22, 'icon_lock').setScale(0.5).setAlpha(0.7));
+      return;
+    }
+    this.costRow(parent, rx, y + 14, def.levels[0], 13);
+    if (!check.ok && check.reason) {
+      parent.add(addText(this, rx, y + 30, check.reason, 11, { color: COLORS.bad, wrap: right - 8 }));
+      return;
+    }
+    parent.add(new Button(this, rx + (right - 10) / 2, y + h - 26, right - 10, 38, `Bauen (${seconds} s)`, () => {
+      this.act((d) => startBuild(d, plot.id, def.id, Date.now()), true);
+    }, { fontSize: 15 }));
   }
 
   // ================================================================ Gebäude-Fenster
@@ -537,7 +574,7 @@ export class CityScene extends Phaser.Scene {
       root.add(addText(this, 30, 456, next, 13, { bold: false, wrap: 262, color: COLORS.muted }));
       this.costRow(root, 30, 498, cost);
       if (!check.ok && check.reason) root.add(addText(this, 30, 518, check.reason, 13, { color: COLORS.bad, wrap: 262 }));
-      root.add(new Button(this, 161, 556, 262, 44, `Ausbauen (${CITY.buildSeconds} s)`, () => {
+      root.add(new Button(this, 161, 556, 262, 44, `Ausbauen (${Math.round(jobDuration(save.city) / 1000)} s)`, () => {
         this.act((d) => startUpgradeBuilding(d, plot.id, Date.now()), true);
       }, { enabled: check.ok, fontSize: 17 }));
     }
@@ -545,26 +582,17 @@ export class CityScene extends Phaser.Scene {
     // Rechte Spalte: Upgrades bzw. Forschung
     const rx = 322;
     const rw = 660;
-    if (def.id === 'universitaet') {
+    const tree = (Object.keys(RESEARCH_TREES) as ResearchTree[]).find((t) => RESEARCH_TREES[t].building === def.id);
+    if (tree) {
+      // Universität / Magiergilde: Knopf zum Baum
+      const done = RESEARCH.filter((r) => r.tree === tree && save.city.research.includes(r.id)).length;
+      const total = RESEARCH.filter((r) => r.tree === tree).length;
+      root.add(new Button(this, rx + rw - 140, 30, 280, 50, `${RESEARCH_TREES[tree].name} öffnen`, () => this.openTree(tree), {
+        color: RESEARCH_TREES[tree].color, fontSize: 18, subLabel: `${done}/${total} erforscht`,
+      }));
+    }
+    if (def.upgrades.length === 0 && tree) {
       root.add(addText(this, rx, 22, 'Forschung', 22, { color: COLORS.gold }));
-      RESEARCH.slice(0, 6).forEach((r, i) => {
-        const st = researchStatus(save, r);
-        const check = canStartResearch(save, r.id);
-        const running = save.city.researchJob?.id === r.id;
-        this.row(root, rx, 60 + i * 86, rw, {
-          icon: r.icon,
-          title: r.name,
-          description: r.description,
-          cost: st.status === 'done' ? undefined : r.cost,
-          reason: st.status === 'locked' ? st.reason : !check.ok && st.status === 'available' ? check.reason : undefined,
-          status: st.status === 'done' ? 'Erforscht' : running ? 'Läuft …' : undefined,
-          dim: st.status === 'locked',
-          button: st.status === 'available' ? {
-            label: `Forschen (${CITY.buildSeconds} s)`, enabled: check.ok,
-            onClick: () => this.act((d) => startResearch(d, r.id, Date.now()), true),
-          } : undefined,
-        });
-      });
     } else if (def.upgrades.length > 0) {
       root.add(addText(this, rx, 22, 'Verbesserungen', 22, { color: COLORS.gold }));
       def.upgrades.slice(0, 6).forEach((u, i) => {
@@ -607,7 +635,10 @@ export class CityScene extends Phaser.Scene {
       }
     }
     if (def.id === 'thronsaal') lines.push('Höhere Stufen: neue Bauplätze, Universität ab Stufe 2');
-    if (def.id === 'universitaet') lines.push(`Forschung bis Stufe ${level} möglich`);
+    if (def.id === 'universitaet') lines.push(`Forschungsbaum bis Stufe ${level}`);
+    if (def.id === 'akademie') lines.push(`Magiebaum bis Stufe ${level}`);
+    const rivalDefs = rivals(def);
+    if (rivalDefs.length > 0) lines.push(`Entweder-oder: ${rivalDefs.map((b) => b.name).join(', ')} kann nicht gebaut werden`);
     return lines;
   }
 
@@ -617,9 +648,138 @@ export class CityScene extends Phaser.Scene {
     if (def.income) {
       for (const id of RESOURCE_IDS) if (def.income[id]) parts.push(`+${def.income[id]} ${RESOURCES[id].name} pro Kampf`);
     }
-    parts.push(def.upgrades.length > 0 || def.id === 'universitaet' ? 'schaltet höhere Upgrades frei' : '');
+    parts.push(def.upgrades.length > 0 ? 'schaltet höhere Upgrades frei' : '');
+    if (def.id === 'universitaet' || def.id === 'akademie') parts.push('neue Forschungen im Baum');
     if (def.id === 'thronsaal') parts.push('neue Bauplätze');
     return parts.filter(Boolean).join(' · ');
+  }
+
+  // ================================================================ Forschungsbaum & Magiebaum
+
+  private openTree(tree: ResearchTree, selectedId?: string): void {
+    const save = saveStore.get();
+    const info = RESEARCH_TREES[tree];
+    const nodes = RESEARCH.filter((r) => r.tree === tree);
+    const p = this.openModal(1240, 640, `${info.name} – ${getBuilding(info.building).name}`, () => this.openTree(tree, selected?.id));
+    const root = p.root;
+    const job = researchJob(save.city, tree);
+    let selected: ResearchDef | undefined = selectedId ? getResearch(selectedId) : undefined;
+    selected ??= nodes.find((r) => r.id === job?.id) ?? nodes.find((r) => researchStatus(save, r).status === 'available') ?? nodes[0];
+    root.add(addText(this, 24, 50, 'Tippe einen Knoten an. Linien zeigen, was vorher erforscht sein muss.', 14, { color: COLORS.muted, bold: false }));
+
+    const nodeW = 170;
+    const nodeH = 70;
+    const pos = (r: ResearchDef) => ({ x: 30 + r.col * 205, y: 84 + r.row * 106 });
+    const colors: Record<string, number> = { done: 0x22c55e, running: info.color, available: 0xfacc15, locked: 0x6b7280 };
+
+    // Verbindungslinien
+    const lines = this.add.graphics();
+    root.add(lines);
+    for (const r of nodes) {
+      for (const req of r.requires) {
+        const from = pos(getResearch(req));
+        const to = pos(r);
+        const done = save.city.research.includes(req);
+        lines.lineStyle(4, done ? 0x22c55e : 0x4b5563, done ? 0.9 : 0.7);
+        const x1 = from.x + nodeW;
+        const y1 = from.y + nodeH / 2;
+        const x2 = to.x;
+        const y2 = to.y + nodeH / 2;
+        const mx = (x1 + x2) / 2;
+        lines.beginPath();
+        lines.moveTo(x1, y1);
+        lines.lineTo(mx, y1);
+        lines.lineTo(mx, y2);
+        lines.lineTo(x2, y2);
+        lines.strokePath();
+      }
+    }
+
+    // Knoten
+    for (const r of nodes) {
+      const { x, y } = pos(r);
+      const st = researchStatus(save, r).status;
+      const c = this.add.container(x, y);
+      const g = this.add.graphics();
+      g.fillStyle(st === 'locked' ? 0x1a1724 : 0x2a2440, 1);
+      g.fillRoundedRect(0, 0, nodeW, nodeH, 12);
+      g.lineStyle(selected?.id === r.id ? 5 : 3, selected?.id === r.id ? 0xffffff : colors[st], 1);
+      g.strokeRoundedRect(0, 0, nodeW, nodeH, 12);
+      c.add(g);
+      const icon = this.add.image(32, nodeH / 2, r.icon).setAlpha(st === 'locked' ? 0.45 : 1);
+      icon.setScale(Math.min(1, 40 / Math.max(icon.width, icon.height)));
+      c.add(icon);
+      c.add(addText(this, 60, 14, r.name, 15, { fit: nodeW - 64, color: st === 'locked' ? COLORS.muted : COLORS.text }));
+      const label = { done: '✔ Erforscht', running: 'Läuft …', available: 'Verfügbar', locked: 'Gesperrt' }[st];
+      c.add(addText(this, 60, nodeH - 22, label, 12, { color: hex(colors[st]) }));
+      const zone = this.add.zone(nodeW / 2, nodeH / 2, nodeW, nodeH).setInteractive({ useHandCursor: true });
+      zone.on('pointerup', () => this.openTree(tree, r.id));
+      c.add(zone);
+      root.add(c);
+    }
+
+    // Detailbereich rechts
+    if (!selected) return;
+    const dx = 850;
+    const dw = 370;
+    const g = this.add.graphics();
+    g.fillStyle(0x1f1b2b, 1);
+    g.fillRoundedRect(dx, 84, dw, 530, 12);
+    root.add(g);
+    const r = selected;
+    const st = researchStatus(save, r);
+    const icon = this.add.image(dx + 44, 128, r.icon);
+    icon.setScale(Math.min(1.4, 60 / Math.max(icon.width, icon.height)));
+    root.add(icon);
+    root.add(addText(this, dx + 86, 104, r.name, 22, { wrap: dw - 96 }));
+    root.add(addText(this, dx + 86, 140, `Braucht ${getBuilding(info.building).name} Stufe ${r.requiredLevel}`, 13, { color: COLORS.muted }));
+    let y = 178;
+    const desc = addText(this, dx + 18, y, r.description, 16, { bold: false, wrap: dw - 36 });
+    root.add(desc);
+    y += desc.height + 12;
+    const effects: string[] = [];
+    if (r.unlocksBuilding) effects.push(`Neues Gebäude: ${getBuilding(r.unlocksBuilding).name}`);
+    if (r.unlocksTowers) effects.push(`Neuer Turm: ${r.unlocksTowers.map((t) => getTower(t).name).join(', ')}`);
+    if (r.modifiers) effects.push(...describeModifiersCompact(r.modifiers));
+    if (effects.length) {
+      const t = addText(this, dx + 18, y, effects.map((e) => `• ${e}`).join('\n'), 14, { color: '#86efac', wrap: dw - 36 });
+      root.add(t);
+      y += t.height + 12;
+    }
+    if (r.requires.length) {
+      const t = addText(this, dx + 18, y, `Voraussetzung: ${r.requires.map((id) => getResearch(id).name).join(', ')}`, 13, { color: COLORS.muted, wrap: dw - 36 });
+      root.add(t);
+      y += t.height + 12;
+    }
+    if (st.status === 'done') {
+      root.add(addText(this, dx + dw / 2, 560, 'Bereits erforscht', 20, { origin: [0.5, 0.5], color: COLORS.good }));
+      return;
+    }
+    if (st.status === 'running') {
+      const text = addText(this, dx + 18, 500, '', 17);
+      const bar = this.add.graphics();
+      root.add([text, bar]);
+      const update = () => {
+        const j = researchJob(saveStore.get().city, tree);
+        if (!j) return;
+        text.setText(`Wird erforscht … noch ${Math.max(0, Math.ceil((j.finishAt - Date.now()) / 1000))} s`);
+        bar.clear();
+        bar.fillStyle(0x000000, 0.6);
+        bar.fillRect(dx + 18, 534, dw - 36, 16);
+        bar.fillStyle(info.color, 1);
+        bar.fillRect(dx + 20, 536, (dw - 40) * jobProgress(j, Date.now()), 12);
+      };
+      update();
+      p.updaters.push(update);
+      return;
+    }
+    this.costRow(root, dx + 18, 486, r.cost, 16);
+    const check = canStartResearch(save, r.id);
+    if (!check.ok && check.reason) root.add(addText(this, dx + 18, 506, check.reason, 13, { color: COLORS.bad, wrap: dw - 36 }));
+    const seconds = Math.round(jobDuration(save.city) / 1000);
+    root.add(new Button(this, dx + dw / 2, 570, dw - 36, 54, `Forschen (${seconds} s)`, () => {
+      this.act((d) => startResearch(d, r.id, Date.now()));
+    }, { enabled: check.ok, fontSize: 20, color: info.color }));
   }
 
   // ================================================================ Nacht-Vorschau

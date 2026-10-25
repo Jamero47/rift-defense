@@ -69,6 +69,48 @@ export const CARDS: readonly CardDef[] = [
     instant: { heal: 5 },
   },
 
+  {
+    id: 'kleeblatt', name: 'Kleeblatt', rarity: 'common',
+    description: '+1 Glück: seltenere Karten, mehr Gold und seltene Funde',
+    modifiers: [{ stat: 'luck', kind: 'flat', value: 1 }],
+  },
+  {
+    id: 'giftmischer', name: 'Giftmischer', rarity: 'common',
+    description: 'Gifttürme: +25 % Giftschaden',
+    modifiers: [{ stat: 'poisonDamage', kind: 'pct', value: 0.25, towerTags: ['poison'] }],
+  },
+  {
+    id: 'schwere_brocken', name: 'Schwere Brocken', rarity: 'common',
+    description: 'Katapulte: +15 % Schaden',
+    modifiers: [{ stat: 'damage', kind: 'pct', value: 0.15, towerTags: ['catapult'] }],
+  },
+  {
+    id: 'manaquelle', name: 'Manaquelle', rarity: 'common',
+    description: 'Alle Türme: +12 % Mana-Regeneration',
+    modifiers: [{ stat: 'manaRegen', kind: 'pct', value: 0.12 }],
+  },
+  {
+    id: 'flickwerk', name: 'Flickwerk', rarity: 'common',
+    description: 'Das Tor heilt nach jeder Welle um 1',
+    modifiers: [{ stat: 'gateRegen', kind: 'flat', value: 1 }],
+    maxStacks: 3,
+  },
+  {
+    id: 'sammelkoerbe', name: 'Sammelkörbe', rarity: 'common',
+    description: 'Zivilisten der Rift-Sammler arbeiten 25 % schneller',
+    modifiers: [{ stat: 'gatherSpeed', kind: 'pct', value: 0.25, towerTags: ['gatherer'] }],
+  },
+  {
+    id: 'kristallsplitter', name: 'Kristallsplitter', rarity: 'common',
+    description: '+1 Rift-Kristall für jeden besiegten Gegner',
+    modifiers: [{ stat: 'crystalsPerKill', kind: 'flat', value: 1 }],
+    maxStacks: 3,
+  },
+  {
+    id: 'gegenwind', name: 'Gegenwind', rarity: 'common',
+    description: 'Windtürme: +25 % Rückstoß',
+    modifiers: [{ stat: 'knockback', kind: 'pct', value: 0.25, towerTags: ['wind'] }],
+  },
   // ---------- Selten ----------
   {
     id: 'schmiedekunst', name: 'Schmiedekunst', rarity: 'rare',
@@ -103,6 +145,57 @@ export const CARDS: readonly CardDef[] = [
     maxStacks: 3,
   },
 
+  {
+    id: 'hufeisen', name: 'Hufeisen', rarity: 'rare',
+    description: '+2 Glück',
+    modifiers: [{ stat: 'luck', kind: 'flat', value: 2 }],
+  },
+  {
+    id: 'scharfe_klingen', name: 'Scharfe Klingen', rarity: 'rare',
+    description: 'Alle Türme: +25 % kritischer Schaden',
+    modifiers: [{ stat: 'critDamage', kind: 'flat', value: 0.25 }],
+  },
+  {
+    id: 'lautes_laeuten', name: 'Lautes Läuten', rarity: 'rare',
+    description: 'Glockentürme: Aura +30 % stärker, +15 % Reichweite',
+    modifiers: [
+      { stat: 'auraStrength', kind: 'pct', value: 0.3, towerTags: ['bell'] },
+      { stat: 'range', kind: 'pct', value: 0.15, towerTags: ['bell'] },
+    ],
+  },
+  {
+    id: 'reiche_ader', name: 'Reiche Ader', rarity: 'rare',
+    description: 'Kristallminen: +30 % Ertrag',
+    modifiers: [{ stat: 'mineIncome', kind: 'pct', value: 0.3, towerTags: ['mine'] }],
+  },
+  {
+    id: 'zauberverstaerker', name: 'Zauberverstärker', rarity: 'rare',
+    description: 'Alle Turm-Fähigkeiten wirken 20 % stärker',
+    modifiers: [{ stat: 'abilityPower', kind: 'pct', value: 0.2 }],
+  },
+  {
+    id: 'vorgeladen', name: 'Vorgeladen', rarity: 'rare',
+    description: 'Neu gebaute Türme starten mit 50 % Mana',
+    modifiers: [{ stat: 'startMana', kind: 'flat', value: 0.5 }],
+    maxStacks: 2,
+  },
+  {
+    id: 'aetzgift', name: 'Ätzgift', rarity: 'rare',
+    description: 'Gifttürme: +40 % Giftschaden, +10 % Reichweite',
+    modifiers: [
+      { stat: 'poisonDamage', kind: 'pct', value: 0.4, towerTags: ['poison'] },
+      { stat: 'range', kind: 'pct', value: 0.1, towerTags: ['poison'] },
+    ],
+  },
+  {
+    id: 'weitwurf', name: 'Weitwurf', rarity: 'rare',
+    description: 'Katapulte: +15 % Reichweite und +15 % Explosionsradius',
+    modifiers: [
+      { stat: 'range', kind: 'pct', value: 0.15, towerTags: ['catapult'] },
+      { stat: 'splashRadius', kind: 'pct', value: 0.15, towerTags: ['catapult'] },
+    ],
+  },
+
   // ---------- Episch ----------
   {
     id: 'kettenblitz', name: 'Kettenblitz', rarity: 'epic',
@@ -134,6 +227,41 @@ export const CARDS: readonly CardDef[] = [
     maxStacks: 3,
   },
 
+  {
+    id: 'glueckspilz', name: 'Glückspilz', rarity: 'epic',
+    description: '+3 Glück und +2 % Chance auf seltene Funde',
+    modifiers: [
+      { stat: 'luck', kind: 'flat', value: 3 },
+      { stat: 'rareDropChance', kind: 'flat', value: 0.02 },
+    ],
+  },
+  {
+    id: 'manaschleife', name: 'Manaschleife', rarity: 'epic',
+    description: '20 % Chance, dass eine Fähigkeit nur halb so viel Mana kostet',
+    modifiers: [{ stat: 'abilityRefund', kind: 'flat', value: 0.2 }],
+    maxStacks: 2,
+  },
+  {
+    id: 'grosse_familie', name: 'Große Familie', rarity: 'epic',
+    description: 'Rift-Sammler: +1 Zivilist',
+    modifiers: [{ stat: 'gatherers', kind: 'flat', value: 1, towerTags: ['gatherer'] }],
+    maxStacks: 2,
+  },
+  {
+    id: 'seuche', name: 'Seuche', rarity: 'epic',
+    description: 'Gift- und Magie-Türme: +20 % Schaden; Gift wirkt +60 %',
+    modifiers: [
+      { stat: 'damage', kind: 'pct', value: 0.2, towerTags: ['poison', 'magic'] },
+      { stat: 'poisonDamage', kind: 'pct', value: 0.6, towerTags: ['poison'] },
+    ],
+  },
+  {
+    id: 'turmbund', name: 'Turmbund', rarity: 'epic',
+    description: 'Unterstützungs- und Wirtschaftstürme: +1 baubar',
+    modifiers: [{ stat: 'towerLimit', kind: 'flat', value: 1, towerTags: ['support', 'economy'] }],
+    maxStacks: 1,
+  },
+
   // ---------- Legendär ----------
   {
     id: 'mehrfachschuss', name: 'Mehrfachschuss', rarity: 'legendary',
@@ -158,6 +286,34 @@ export const CARDS: readonly CardDef[] = [
     modifiers: [
       { stat: 'kingDamage', kind: 'pct', value: 0.6 },
       { stat: 'kingAbilityCooldown', kind: 'pct', value: -0.4 },
+    ],
+    maxStacks: 1,
+  },
+  {
+    id: 'fortuna', name: 'Fortunas Gunst', rarity: 'legendary',
+    description: '+5 Glück, +5 % Chance auf seltene Funde, +1 Karten-Neuwurf',
+    modifiers: [
+      { stat: 'luck', kind: 'flat', value: 5 },
+      { stat: 'rareDropChance', kind: 'flat', value: 0.05 },
+      { stat: 'cardRerolls', kind: 'flat', value: 1 },
+    ],
+    maxStacks: 1,
+  },
+  {
+    id: 'erzmagie', name: 'Erzmagie', rarity: 'legendary',
+    description: 'Alle Türme: +40 % Mana-Regeneration, Fähigkeiten +30 % stärker',
+    modifiers: [
+      { stat: 'manaRegen', kind: 'pct', value: 0.4 },
+      { stat: 'abilityPower', kind: 'pct', value: 0.3 },
+    ],
+    maxStacks: 1,
+  },
+  {
+    id: 'blutkristalle', name: 'Blutkristalle', rarity: 'legendary',
+    description: '+3 Rift-Kristalle pro Gegner und das Tor heilt 2 pro Welle',
+    modifiers: [
+      { stat: 'crystalsPerKill', kind: 'flat', value: 3 },
+      { stat: 'gateRegen', kind: 'flat', value: 2 },
     ],
     maxStacks: 1,
   },

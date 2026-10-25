@@ -107,8 +107,80 @@ describe('Stadt', () => {
       if (b.unlock.type === 'research') expect(RESEARCH.some((r) => r.id === (b.unlock as { id: string }).id)).toBe(true);
       if (b.unlock.type === 'story') expect(STORY_NIGHTS.some((st) => st.id === (b.unlock as { id: string }).id)).toBe(true);
     }
-    for (const r of RESEARCH) expect(BUILDINGS.some((b) => b.id === r.unlocksBuilding)).toBe(true);
+    for (const r of RESEARCH) {
+      if (r.unlocksBuilding) expect(BUILDINGS.some((b) => b.id === r.unlocksBuilding), r.id).toBe(true);
+      for (const t of r.unlocksTowers ?? []) expect(getTower(t).id).toBe(t);
+      for (const req of r.requires) expect(RESEARCH.find((o) => o.id === req)?.tree, `${r.id} → ${req}`).toBe(r.tree);
+      expect(r.unlocksBuilding || r.unlocksTowers || r.modifiers, r.id).toBeTruthy();
+    }
+    // Jedes Feld im Baum nur einmal belegt
+    const cells = RESEARCH.map((r) => `${r.tree}:${r.col}:${r.row}`);
+    expect(new Set(cells).size).toBe(cells.length);
+    for (const b of BUILDINGS) for (const x of b.excludes ?? []) expect(BUILDINGS.some((o) => o.id === x), `${b.id} → ${x}`).toBe(true);
     const ids = BUILDINGS.flatMap((b) => b.upgrades.map((u) => u.id));
     expect(new Set(ids).size).toBe(ids.length);
+    expect(PLOTS.length).toBeGreaterThanOrEqual(26);
+    expect(new Set(PLOTS.map((p) => p.id)).size).toBe(PLOTS.length);
+  });
+
+  it('Entweder-oder: Kanonengießerei schließt die Belagerungswerkstatt aus (und umgekehrt)', () => {
+    const s = rich();
+    build(s, 'thron', 'thronsaal');
+    s.city.research.push('schiesspulver', 'belagerung');
+    build(s, 'stadt_1', 'giesserei');
+    s.city.boughtPlots.push('stadt_3');
+    const check = canBuild(s, 'stadt_3', 'belagerungswerkstatt');
+    expect(check.ok).toBe(false);
+    expect(check.reason).toMatch(/Entweder-oder/);
+    const t = rich();
+    build(t, 'thron', 'thronsaal');
+    t.city.research.push('schiesspulver', 'belagerung');
+    build(t, 'stadt_1', 'belagerungswerkstatt');
+    t.city.boughtPlots.push('stadt_3');
+    expect(canBuild(t, 'stadt_3', 'giesserei').ok).toBe(false);
+    expect(unlockedTowers(t.city)).toContain('catapult');
+  });
+
+  it('Forschungsbaum: Voraussetzungen und Universitätsstufe', () => {
+    const s = rich();
+    build(s, 'thron', 'thronsaal');
+    startUpgradeBuilding(s, 'thron', 0);
+    completeJobs(s, T);
+    build(s, 'stadt_2', 'universitaet');
+    expect(startResearch(s, 'fischerei', 0).reason).toMatch(/Forstwirtschaft/);
+    expect(startResearch(s, 'forstwirtschaft', 0).ok).toBe(true);
+    expect(startResearch(s, 'schiesspulver', 0).ok).toBe(false); // nur eine Forschung gleichzeitig
+    completeJobs(s, T);
+    expect(startResearch(s, 'fischerei', 0).ok).toBe(true);
+    completeJobs(s, T);
+    expect(startResearch(s, 'handel', 0).reason).toMatch(/Stufe 2/);
+  });
+
+  it('Magiebaum: eigener Forschungsplatz, Boni und Türme', () => {
+    const s = rich();
+    build(s, 'thron', 'thronsaal');
+    startUpgradeBuilding(s, 'thron', 0);
+    completeJobs(s, T);
+    build(s, 'stadt_2', 'universitaet');
+    s.city.story.push('hofmagier');
+    build(s, 'stadt_1', 'akademie');
+    expect(startResearch(s, 'forstwirtschaft', 0).ok).toBe(true);
+    expect(startResearch(s, 'manafluss', 0).ok).toBe(true); // läuft parallel zur Universität
+    completeJobs(s, T);
+    expect(s.city.research).toEqual(expect.arrayContaining(['forstwirtschaft', 'manafluss']));
+    expect(new Modifiers(cityModifiers(s.city)).pct('manaRegen')).toBeCloseTo(0.1);
+    expect(unlockedTowers(s.city)).not.toContain('wind');
+    expect(startResearch(s, 'windzauber', 0).ok).toBe(true);
+    completeJobs(s, T);
+    expect(unlockedTowers(s.city)).toContain('wind');
+  });
+
+  it('Baukunst verkürzt die Bauzeit', () => {
+    const s = rich();
+    build(s, 'thron', 'thronsaal');
+    s.city.research.push('baukunst');
+    expect(startBuild(s, 'stadt_1', 'bogenmacher', 0).ok).toBe(true);
+    expect(s.city.job!.finishAt).toBe(T * 0.75);
+    expect(completeJobs(s, T * 0.75).length).toBe(1);
   });
 });

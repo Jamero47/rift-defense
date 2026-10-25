@@ -13,7 +13,13 @@ Danach `npm test` (prüft Karten/Wellen für alle Rifts) und `npm run smoke` (Sc
    und 3 `levels`. Jede Stufe hat: `cost` (Rift-Kristalle), `physDamage` (normaler Schaden), `magicDamage`,
    `attackSpeed`, `range`, `critChance`, `critDamage`, `mana`, `manaRegen`.
 2. Aussehen: in `src/game/textures.ts` → `drawTowerTop()` einen `case '<id>'` ergänzen.
-3. **Freischalten:** Ein Gebäude muss den Turm in `unlocksTowers` haben (`src/data/buildings.ts`) – sonst taucht er nie auf.
+3. **Freischalten:** Ein Gebäude (`src/data/buildings.ts`) oder eine Forschung (`src/data/research.ts`) muss den Turm
+   in `unlocksTowers` haben – sonst taucht er nie auf.
+5. **Fähigkeit:** `ability.type` wählt eine vorhandene Wirkung (`volley`, `bigshot`, `storm`, `freeze`, `pierce`,
+   `poisonCloud`, `rockRain`, `rally`, `caravan`, `motherlode`, `banish`, `tornado`) mit ihren Zahlen.
+   Neue Wirkung: Typ in `TowerAbility` ergänzen und in `BattleScene.castTowerAbility()` umsetzen.
+6. **Passive Türme:** `attack: 'none'` und in den Stufen `aura`, `gatherers` oder `crystalIncome`.
+   Besondere Treffer: `poison`, `knockback`, `silence`, `slow`, `splashRadius`, `chainTargets`.
 4. Limit und Stufe erhöhen: Gebäude-Upgrades mit `towerLimit` bzw. `towerMaxLevel` und passendem `towerTags`.
 
 ## Neuer Gegner → `src/data/enemies.ts`
@@ -68,12 +74,14 @@ Alle möglichen Werte (`stat`) stehen in `src/core/types.ts` → `StatKey`.
 ```
 
 - `plot`: `throne`, `inner` (Stadtplatz), `mountain` (Berg), `wall` (Mauer, klein), `field` (vor dem Tor).
+- `excludes: ['…']`: Entweder-oder mit anderen Gebäuden (gilt in beide Richtungen).
 - Das Gebäude-Fenster zeigt bis zu 6 Upgrades.
 - Freischaltung über Forschung: zusätzlich einen Eintrag in `src/data/research.ts` (`unlocksBuilding`).
 
 ## Neue Forschung → `src/data/research.ts`
 
-Eintrag mit Kosten, benötigter Universitäts-Stufe und `unlocksBuilding`.
+Eintrag mit `tree` (`uni` = Universität, `magic` = Magiergilde), Lage im Baum (`col` 0–3, `row` 0–4),
+`requires` (Vorgänger), Kosten, benötigter Gebäudestufe und Wirkung: `unlocksBuilding`, `unlocksTowers` und/oder `modifiers`.
 
 ## Neue Story-Nacht → `src/data/story.ts`
 

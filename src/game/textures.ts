@@ -80,7 +80,11 @@ function glow(ctx: Ctx, x: number, y: number, r: number, color: number, alpha = 
 export function generateAllTextures(scene: Phaser.Scene): void {
   for (const rift of RIFTS) {
     for (const tile of Object.values(rift.tiles)) {
-      make(scene, tileKey(rift.id, tile.id), TILE, TILE, (ctx) => drawTile(ctx, tile, rift));
+      make(scene, tileKey(rift.id, tile.id), TILE, TILE, (ctx) => drawTile(ctx, tile, rift, 0));
+    }
+    // Weitere Boden-Varianten, damit die Karte nicht gekachelt aussieht
+    for (let v = 1; v < GROUND_VARIANTS; v++) {
+      make(scene, `${tileKey(rift.id, 'ground')}_${v}`, TILE, TILE, (ctx) => drawTile(ctx, rift.tiles.ground, rift, v));
     }
     make(scene, `portal_${rift.id}`, 96, 128, (ctx) => drawPortal(ctx, rift.color));
   }
@@ -94,6 +98,7 @@ export function generateAllTextures(scene: Phaser.Scene): void {
   make(scene, 'shadow', 48, 24, (ctx) => ellipse(ctx, 24, 12, 22, 10, 'rgba(0,0,0,0.35)'));
   drawProjectiles(scene);
   make(scene, 'king', 64, 76, drawKing);
+  make(scene, 'civilian', 28, 32, drawCivilian);
   drawIcons(scene);
   drawFx(scene);
 }
@@ -102,36 +107,40 @@ export function tileKey(riftId: string, tileId: string): string {
   return `tile_${riftId}_${tileId}`;
 }
 
+export const GROUND_VARIANTS = 3;
+
 // ---------------------------------------------------------------- Felder
 
-function drawTile(ctx: Ctx, def: TileDef, rift: RiftDef): void {
+function drawTile(ctx: Ctx, def: TileDef, rift: RiftDef, variant: number): void {
   const S = TILE;
-  const rng = new Rng(hashSeed(def.id.length * 31 + def.color, rift.color));
+  const rng = new Rng(hashSeed(def.id.length * 31 + def.color, rift.color, variant));
   ctx.fillStyle = css(def.color);
   ctx.fillRect(0, 0, S, S);
-  // Struktur
+  // Struktur – nahtlos: Punkte am Rand werden auf der Gegenseite wiederholt, so entsteht kein sichtbares Raster
+  const dot = (x: number, y: number, r: number, fill: string) => {
+    for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) circle(ctx, x + dx, y + dy, r, fill);
+  };
   for (let i = 0; i < 22; i++) {
-    circle(ctx, rng.float(0, S), rng.float(0, S), rng.float(1, 3.2), css(shade(def.color, rng.float(-0.2, 0.12)), 0.7));
+    dot(rng.float(0, S), rng.float(0, S), rng.float(1, 3.2), css(shade(def.color, rng.float(-0.2, 0.12)), 0.7));
+  }
+  if (!def.path && variant > 0) {
+    // Grasbüschel / Flecken für Abwechslung
+    for (let i = 0; i < 3; i++) ellipse(ctx, rng.float(10, S - 10), rng.float(10, S - 10), rng.float(6, 12), rng.float(3, 6), css(shade(def.color, rng.float(-0.12, 0.12)), 0.6));
   }
   if (def.path) {
     for (let i = 0; i < 6; i++) {
       ellipse(ctx, rng.float(6, S - 6), rng.float(6, S - 6), rng.float(2, 4), rng.float(1.5, 3), css(shade(def.color, 0.25), 0.5));
     }
   }
-  if (def.buildable) {
-    ctx.strokeStyle = 'rgba(0,0,0,0.22)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0.5, 0.5, S - 1, S - 1);
-  }
   drawDeco(ctx, def, rng);
-  // Sonderfelder bekommen einen farbigen Rahmen: grün = Bonus, rot = Nachteil
+  // Sonderfelder: weicher farbiger Schimmer statt Rahmen (grün = Bonus, rot = Nachteil) + kleines Zeichen
   if (def.towerModifiers) {
     const good = def.towerModifiers.every((m) => m.value >= 0);
-    ctx.strokeStyle = good ? 'rgba(134,239,172,0.85)' : 'rgba(248,113,113,0.85)';
-    ctx.lineWidth = 3;
-    ctx.setLineDash([10, 6]);
-    ctx.strokeRect(4, 4, S - 8, S - 8);
-    ctx.setLineDash([]);
+    glow(ctx, S / 2, S / 2, S * 0.5, good ? 0x86efac : 0xf87171, 0.35);
+    const x = S - 13;
+    const y = 13;
+    circle(ctx, x, y, 8, good ? 'rgba(22,101,52,0.9)' : 'rgba(127,29,29,0.9)');
+    poly(ctx, good ? [x - 5, y + 3, x, y - 4, x + 5, y + 3] : [x - 5, y - 3, x, y + 4, x + 5, y - 3], good ? '#bbf7d0' : '#fecaca');
   }
 }
 
@@ -473,7 +482,108 @@ function drawTowerTop(ctx: Ctx, id: string, color: number): void {
       ctx.fillRect(c - 12, c - 2, 38, 4);
       poly(ctx, [c + 30, c, c + 23, c - 6, c + 23, c + 6], '#94a3b8');
       break;
+    case 'poison':
+      circle(ctx, c, c, 17, '#3f3f46');
+      glow(ctx, c, c, 18, color, 0.6);
+      ellipse(ctx, c, c + 2, 12, 10, '#4d7c0f');
+      ellipse(ctx, c, c, 10, 8, css(color));
+      for (const [x, y, r] of [[-4, -3, 3], [3, 1, 2.5], [-1, 4, 2]]) circle(ctx, c + x, c + y, r, '#d9f99d');
+      ctx.fillStyle = '#52525b';
+      ctx.fillRect(c + 8, c - 3, 16, 6);
+      break;
+    case 'catapult':
+      ctx.fillStyle = '#6b4423';
+      ctx.fillRect(c - 18, c - 14, 36, 6);
+      ctx.fillRect(c - 18, c + 8, 36, 6);
+      ctx.save();
+      ctx.translate(c, c);
+      ctx.fillStyle = '#8b5a2b';
+      ctx.fillRect(-14, -3, 34, 6);
+      ctx.restore();
+      ellipse(ctx, c + 22, c, 7, 9, '#5b3a1e');
+      circle(ctx, c + 22, c, 5, '#78716c');
+      circle(ctx, c - 12, c, 5, '#3f3f46');
+      break;
+    case 'bell': {
+      circle(ctx, c, c, 18, '#57534e');
+      glow(ctx, c, c, 22, color, 0.5);
+      ctx.fillStyle = css(color);
+      ctx.beginPath();
+      ctx.moveTo(c - 13, c + 9);
+      ctx.quadraticCurveTo(c - 12, c - 14, c, c - 14);
+      ctx.quadraticCurveTo(c + 12, c - 14, c + 13, c + 9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = css(shade(color, -0.35));
+      ctx.fillRect(c - 15, c + 7, 30, 4);
+      circle(ctx, c, c + 13, 3.5, css(shade(color, -0.45)));
+      circle(ctx, c - 4, c - 6, 3, 'rgba(255,255,255,0.5)');
+      break;
+    }
+    case 'gatherer':
+      circle(ctx, c, c, 18, '#78350f');
+      circle(ctx, c, c, 15, '#a16207');
+      ctx.strokeStyle = '#451a03';
+      ctx.lineWidth = 2;
+      for (const y of [-6, 0, 6]) {
+        ctx.beginPath();
+        ctx.moveTo(c - 12, c + y);
+        ctx.lineTo(c + 12, c + y);
+        ctx.stroke();
+      }
+      poly(ctx, [c - 4, c - 14, c + 4, c - 14, c, c - 22], css(color));
+      circle(ctx, c + 10, c + 8, 5, '#22c55e');
+      circle(ctx, c - 9, c + 9, 4, '#a3a3a3');
+      break;
+    case 'mine':
+      circle(ctx, c, c, 18, '#44403c');
+      ellipse(ctx, c, c + 3, 13, 9, '#1c1917');
+      glow(ctx, c, c, 20, color, 0.55);
+      for (const [x, h] of [[-6, 14], [2, 18], [9, 11]]) poly(ctx, [c + x - 4, c + 6, c + x, c + 6 - h, c + x + 4, c + 6], css(color), '#86198f', 1);
+      break;
+    case 'banner': {
+      circle(ctx, c, c, 18, '#3b0764');
+      glow(ctx, c, c, 22, color, 0.6);
+      ctx.strokeStyle = css(color);
+      ctx.lineWidth = 2;
+      for (const r of [8, 14]) {
+        ctx.beginPath();
+        ctx.arc(c, c, r, 0, TAU);
+        ctx.stroke();
+      }
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * TAU;
+        circle(ctx, c + Math.cos(a) * 14, c + Math.sin(a) * 14, 2.5, '#fdf4ff');
+      }
+      circle(ctx, c, c, 4, '#fdf4ff');
+      break;
+    }
+    case 'wind':
+      circle(ctx, c, c, 18, '#334155');
+      ctx.strokeStyle = css(color);
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(c, c, 6 + i * 4, i * 2.1, i * 2.1 + 3.6);
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+      poly(ctx, [c + 28, c, c + 18, c - 6, c + 18, c + 6], css(color));
+      break;
   }
+}
+
+/** Zivilist des Rift-Sammlers: Figur mit Korb. */
+function drawCivilian(ctx: Ctx): void {
+  ellipse(ctx, 14, 29, 9, 3, 'rgba(0,0,0,0.3)');
+  poly(ctx, [7, 28, 9, 14, 19, 14, 21, 28], '#a16207');
+  circle(ctx, 14, 9, 6, '#f1c27d');
+  ellipse(ctx, 14, 5, 7, 3, '#78350f');
+  ctx.fillStyle = '#92400e';
+  roundRect(ctx, 16, 15, 10, 8, 2);
+  ctx.fill();
+  circle(ctx, 21, 15, 2.5, '#22c55e');
 }
 
 // ---------------------------------------------------------------- Gegner (Blickrichtung rechts)
@@ -704,6 +814,30 @@ function drawProjectiles(scene: Phaser.Scene): void {
     glow(ctx, 9, 6, 9, 0x7fd3f7, 0.7);
     poly(ctx, [18, 6, 9, 1, 0, 6, 9, 11], '#e0f2fe', '#7dd3fc', 1);
   });
+  make(scene, 'proj_glob', 14, 14, (ctx) => {
+    glow(ctx, 7, 7, 7, 0x84cc16, 0.8);
+    circle(ctx, 7, 7, 4.5, '#a3e635');
+    circle(ctx, 5.5, 5.5, 1.5, '#ecfccb');
+  });
+  make(scene, 'proj_rock', 18, 18, (ctx) => {
+    poly(ctx, [2, 10, 5, 3, 12, 1, 17, 7, 15, 15, 7, 17], '#78716c', '#44403c', 1);
+    circle(ctx, 7, 6, 2, 'rgba(255,255,255,0.3)');
+  });
+  make(scene, 'proj_orb', 18, 18, (ctx) => {
+    glow(ctx, 9, 9, 9, 0xf0abfc, 0.9);
+    circle(ctx, 9, 9, 4, '#fdf4ff');
+  });
+  make(scene, 'proj_gust', 24, 16, (ctx) => {
+    ctx.strokeStyle = 'rgba(224,242,254,0.9)';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    for (const y of [4, 8, 12]) {
+      ctx.beginPath();
+      ctx.moveTo(2, y);
+      ctx.quadraticCurveTo(12, y - 3, 22, y);
+      ctx.stroke();
+    }
+  });
   make(scene, 'proj_royal', 22, 22, (ctx) => {
     glow(ctx, 11, 11, 11, 0xfde047, 0.8);
     const pts: number[] = [];
@@ -910,6 +1044,70 @@ function drawIcons(scene: Phaser.Scene): void {
     poly(ctx, [12, 6, 24, 6, 24, 24, 34, 28, 34, 34, 10, 34], '#7c2d12', '#431407');
     ctx.fillStyle = '#facc15';
     ctx.fillRect(12, 10, 12, 3);
+  });
+  make(scene, 'icon_clover', S, S, (ctx) => {
+    for (const [dx, dy] of [[-6, -6], [6, -6], [-6, 6], [6, 6]]) circle(ctx, 20 + dx, 18 + dy, 7.5, '#22c55e');
+    circle(ctx, 20, 18, 4, '#16a34a');
+    ctx.strokeStyle = '#15803d';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(20, 22);
+    ctx.quadraticCurveTo(24, 30, 28, 36);
+    ctx.stroke();
+  });
+  make(scene, 'icon_flask', S, S, (ctx) => {
+    ctx.fillStyle = '#e5e7eb';
+    ctx.fillRect(16, 4, 8, 12);
+    poly(ctx, [16, 15, 24, 15, 34, 34, 6, 34], 'rgba(226,232,240,0.6)', '#94a3b8');
+    poly(ctx, [11, 25, 29, 25, 34, 34, 6, 34], '#84cc16');
+    circle(ctx, 17, 29, 2, '#ecfccb');
+  });
+  make(scene, 'icon_bell', S, S, (ctx) => {
+    ctx.fillStyle = '#d4a017';
+    ctx.beginPath();
+    ctx.moveTo(8, 30);
+    ctx.quadraticCurveTo(9, 6, 20, 6);
+    ctx.quadraticCurveTo(31, 6, 32, 30);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#92400e';
+    ctx.fillRect(6, 29, 28, 4);
+    circle(ctx, 20, 35, 3, '#92400e');
+  });
+  make(scene, 'icon_scroll', S, S, (ctx) => {
+    ctx.fillStyle = '#fef3c7';
+    ctx.fillRect(9, 8, 22, 24);
+    ellipse(ctx, 9, 20, 4, 12, '#d6b48a');
+    ellipse(ctx, 31, 20, 4, 12, '#d6b48a');
+    ctx.strokeStyle = '#a16207';
+    ctx.lineWidth = 1.5;
+    for (const y of [14, 19, 24]) {
+      ctx.beginPath();
+      ctx.moveTo(14, y);
+      ctx.lineTo(27, y);
+      ctx.stroke();
+    }
+  });
+  make(scene, 'icon_wand', S, S, (ctx) => {
+    ctx.strokeStyle = '#7c3aed';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(8, 34);
+    ctx.lineTo(28, 12);
+    ctx.stroke();
+    glow(ctx, 30, 10, 10, 0xe9d5ff, 0.9);
+    circle(ctx, 30, 10, 3.5, '#faf5ff');
+  });
+  make(scene, 'icon_wind', S, S, (ctx) => {
+    ctx.strokeStyle = '#7dd3fc';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    for (const [y, w] of [[12, 26], [20, 30], [28, 20]]) {
+      ctx.beginPath();
+      ctx.moveTo(6, y);
+      ctx.quadraticCurveTo(6 + w, y - 6, 6 + w * 0.8, y + 2);
+      ctx.stroke();
+    }
   });
   make(scene, 'icon_lock', S, S, (ctx) => {
     ctx.strokeStyle = '#cbd5e1';
