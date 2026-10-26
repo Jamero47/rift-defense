@@ -21,6 +21,8 @@ import { RESOURCES } from '../data/resources';
 import { storyForNight } from '../data/story';
 import { getTower } from '../data/towers';
 import { sfx } from '../services/sound';
+import { applyDevCheats, finishJobsNow } from '../core/dev';
+import { openDevPanel } from '../ui/devPanel';
 import { riftBurst, warpIn, warpOut } from '../ui/warp';
 import { getRift } from '../data/rifts';
 import { Button, COLORS, addText, drawPanel, soundToggle } from '../ui/widgets';
@@ -89,6 +91,7 @@ export class CityScene extends Phaser.Scene {
     this.hint = null;
     this.resTexts = [];
     this.toastCount = 0;
+    saveStore.update((d) => applyDevCheats(d));
     this.finishJobs(false);
     this.drawWorld();
     this.plotLayer = this.add.container(0, 0).setDepth(10);
@@ -179,14 +182,22 @@ export class CityScene extends Phaser.Scene {
     this.renderPlots();
     this.renderHint();
     this.panel?.reopen();
-    const ok = canStartNight(saveStore.get().city).ok;
+    const save = saveStore.get();
+    const ok = canStartNight(save.city).ok;
     this.nightBtn.setColor(ok ? COLORS.royal : 0x3b3552);
+    this.nightBtn.setLabel(`Nacht ${save.night}`).setSubLabel(riftForNight(save.seed, save.night).shortName);
   }
 
   /** Führt eine Aktion am Spielstand aus. closePanel: Fenster danach schließen (z. B. nach »Bauen«). */
   private act(fn: (save: SaveData) => { ok: boolean; reason?: string }, closePanel = false): void {
     let result: { ok: boolean; reason?: string } = { ok: false };
-    saveStore.update((d) => (result = fn(d)));
+    saveStore.update((d) => {
+      result = fn(d);
+      // Entwicklermodus: sofort fertig bauen, Ressourcen auffüllen
+      finishJobsNow(d, Date.now());
+      applyDevCheats(d);
+    });
+    if (result.ok) this.finishJobs(true);
     if (!result.ok && result.reason) this.toast(result.reason, COLORS.bad);
     if (result.ok && closePanel) this.closePanel();
     this.refreshAll();
@@ -273,6 +284,11 @@ export class CityScene extends Phaser.Scene {
     g.fillRect(0, 0, GAME_WIDTH, HUD_H);
     new Button(this, 56, 32, 96, 46, 'Menü', () => this.scene.start('Menu'), { color: COLORS.buttonAlt, fontSize: 18 }).setDepth(51);
     soundToggle(this, 1236, 32, 76, 46, true).setDepth(51);
+    if (saveStore.get().settings.dev.enabled) {
+      new Button(this, 1150, 32, 76, 46, 'DEV', () => openDevPanel(this, { onChange: () => this.refreshAll() }), {
+        color: 0x0e7490, fontSize: 18,
+      }).setDepth(51);
+    }
     addText(this, 116, 20, 'Deine Stadt', 24, { origin: [0, 0.5] }).setDepth(51);
     this.subtitle = addText(this, 116, 46, '', 14, { origin: [0, 0.5], color: COLORS.muted }).setDepth(51);
     this.resTexts = RESOURCE_IDS.map((id, i) => {
@@ -285,7 +301,8 @@ export class CityScene extends Phaser.Scene {
 
   private refreshResources(): void {
     const save = saveStore.get();
-    RESOURCE_IDS.forEach((id, i) => this.resTexts[i]?.setText(String(save.resources[id])));
+    const infinite = save.settings.dev.infinite;
+    RESOURCE_IDS.forEach((id, i) => this.resTexts[i]?.setText(infinite ? '∞' : String(save.resources[id])));
     this.subtitle?.setText(`Tag-Sphäre · Thronsaal Stufe ${throneLevel(save.city)}`);
   }
 

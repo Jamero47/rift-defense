@@ -111,3 +111,17 @@ describe('Spielstand', () => {
     expect(s.city.job).toBeNull();
   });
 });
+
+describe('Entwicklermodus', () => {
+  it('unendliche Ressourcen sichern die echten und geben sie zurück', async () => {
+    const { defaultSave } = await import('../src/core/save');
+    const { setInfinite, DEV_AMOUNT } = await import('../src/core/dev');
+    const s = defaultSave(1);
+    s.resources.gold = 42;
+    setInfinite(s, true);
+    expect(s.resources.gold).toBe(DEV_AMOUNT);
+    s.resources.gold -= 500;
+    setInfinite(s, false);
+    expect(s.resources.gold).toBe(42);
+  });
+});

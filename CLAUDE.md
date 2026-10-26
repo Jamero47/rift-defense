@@ -57,6 +57,8 @@ in `screenshots/` ansehen. `smoke` bricht bei JavaScript-Fehlern im Browser ab.
 - Turmstufen: 5 Stufen pro Turm, `baseMaxLevel` 3; Stufe 4–5 über `towerMaxLevel` (Gebäude-Upgrade, Forschung).
 - Wege: `core/mapgen` gräbt Felder-Wege; `BattleScene.buildRoutes()` rundet sie zu Straßen (`smoothCorners`),
   `drawRoads()` zeichnet sie – einfache Wegfelder zeigen darunter Boden.
+- Entwicklermodus: `src/ui/devPanel.ts` + `src/core/dev.ts`, Einstellungen in `settings.dev` (Backup der echten Ressourcen);
+  Battle nimmt `startWave` in den Szenendaten, `devJumpToWave/devWinWave/devWinNight`.
 - Debug: `?debug` in der URL → `window.rift` (`go(scene, data)`, `battle()`, `save`, `button(label)` = Knopf-Position).
   Wird von `scripts/smoke.mjs` genutzt (`--full-city` für Tests späterer Nächte mit allen Türmen).
 

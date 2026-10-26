@@ -3,6 +3,7 @@ import { GAME_WIDTH } from '../config';
 import { riftForNight } from '../core/progression';
 import { activeMod } from '../core/mod';
 import { saveStore } from '../core/save';
+import { openDevPanel } from '../ui/devPanel';
 import { Button, COLORS, addText, showDialog, soundToggle } from '../ui/widgets';
 import { drawBackdrop } from './backdrop';
 
@@ -32,6 +33,7 @@ export class MenuScene extends Phaser.Scene {
     new Button(this, GAME_WIDTH / 2 - 90, 455, 160, 56, 'Vollbild', () => this.toggleFullscreen(), { color: COLORS.buttonAlt, fontSize: 20 });
     new Button(this, GAME_WIDTH / 2 + 90, 455, 160, 56, 'Neues Spiel', () => this.confirmReset(), { color: COLORS.danger, fontSize: 20 });
     soundToggle(this, GAME_WIDTH / 2, 530, 340, 50);
+    new Button(this, GAME_WIDTH - 236, 668, 160, 44, 'Entwickler', () => openDevPanel(this), { color: 0x0e7490, fontSize: 17 });
     new Button(this, GAME_WIDTH - 80, 668, 136, 44, 'Toolbox', () => window.open('./editor.html', '_blank'), {
       color: COLORS.buttonAlt, fontSize: 17,
     });

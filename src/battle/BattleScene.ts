@@ -7,6 +7,7 @@ import { cardModifiers, computeRewards, setupNight, type NightSetup } from '../c
 import { Rng, randomSeed } from '../core/rng';
 import { Route, simplifyPoints } from '../core/route';
 import { saveStore } from '../core/save';
+import { DEV_CRYSTALS } from '../core/dev';
 import { RESOURCE_IDS, addResources, emptyResources, type GridPos, type Modifier, type Resources, type Vec } from '../core/types';
 import type { WaveDef } from '../core/wavegen';
 import type { CardDef } from '../data/cards';
@@ -109,6 +110,8 @@ export class BattleScene extends Phaser.Scene {
   availableTowers: string[] = [];
   /** Aktuelle Felder (abgebaute Rohstoffe werden zu Boden) */
   private tiles: string[][] = [];
+  /** Entwicklermodus: mit dieser Welle beginnen */
+  private startWaveDev = 1;
   /** Beim Start aus dem Rift hereinwarpen (Wechsel Tag → Nacht) */
   private warpOnStart = false;
   /** Mittellinie der Straßen (mit runden Kurven) */
@@ -185,9 +188,10 @@ export class BattleScene extends Phaser.Scene {
   }
 
   /** Phaser verwendet die Szene wieder – deshalb hier alles zurücksetzen. */
-  init(data: { night?: number; warp?: boolean }): void {
+  init(data: { night?: number; warp?: boolean; startWave?: number }): void {
     const save = saveStore.get();
     this.warpOnStart = !!data.warp;
+    this.startWaveDev = data.startWave ?? 1;
     this.setup = setupNight(save.seed, data.night ?? save.night);
     this.rift = this.setup.rift;
     this.waves = this.setup.waves;
@@ -260,7 +264,9 @@ export class BattleScene extends Phaser.Scene {
       this.cameras.main.scrollX += dx;
       this.cameras.main.scrollY += dy;
     });
-    this.hud.setPreview(this.waves[0]);
+    // Entwicklermodus: Nacht ab einer späteren Welle beginnen
+    if (this.startWaveDev > 1) this.waveIndex = Math.min(this.waves.length - 1, this.startWaveDev - 1);
+    this.hud.setPreview(this.waves[this.waveIndex]);
     this.showTutorial();
     if (this.warpOnStart) warpIn(this, this.rift.color, 1100, () => this.banner(`Nacht ${this.setup.night}`, this.rift.name, this.rift.color));
     else this.banner(`Nacht ${this.setup.night}`, this.rift.name, this.rift.color);
@@ -275,6 +281,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   update(_time: number, deltaMs: number): void {
+    if (saveStore.get().settings.dev.infinite) this.crystals = Math.max(this.crystals, DEV_CRYSTALS);
     const dt = Math.min(deltaMs / 1000, 0.05);
     if (!this.paused && this.phase !== 'ended' && this.phase !== 'draft') {
       // Bei 2×/3× Tempo mehrere kleine Schritte statt eines großen (genauere Treffer)
@@ -1799,6 +1806,43 @@ export class BattleScene extends Phaser.Scene {
     this.tutorialStep++;
     if (this.tutorialStep >= BattleScene.TUTORIAL.length) this.tutorialStep = -1;
     this.showTutorial();
+  }
+
+  // ================================================================ Entwicklermodus
+
+  /** Springt zu einer Welle (nur zwischen den Wellen). */
+  devJumpToWave(wave: number): void {
+    if (this.phase !== 'build') {
+      floatText(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, 'Nur zwischen den Wellen möglich', COLORS.bad, 24, true);
+      return;
+    }
+    this.waveIndex = Phaser.Math.Clamp(wave - 1, 0, this.waves.length - 1);
+    this.hud.setPreview(this.waves[this.waveIndex]);
+    floatText(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, `Weiter mit Welle ${this.waveIndex + 1}`, '#22d3ee', 28, true);
+  }
+
+  private devClearEnemies(): void {
+    this.spawnQueue = [];
+    for (const e of this.enemies) e.destroy();
+    this.enemies = [];
+  }
+
+  /** Laufende Welle sofort gewinnen. */
+  devWinWave(): void {
+    if (this.phase !== 'wave') {
+      floatText(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, 'Erst eine Welle starten', COLORS.bad, 24, true);
+      return;
+    }
+    this.devClearEnemies();
+  }
+
+  /** Ganze Nacht sofort gewinnen. */
+  devWinNight(): void {
+    if (this.outcome !== 'open' || this.phase === 'ended') return;
+    this.devClearEnemies();
+    this.menus.close();
+    this.waveIndex = this.waves.length;
+    this.victory();
   }
 
   /** Für Tests/Entwicklung: aktuelle Karten-Infos. */

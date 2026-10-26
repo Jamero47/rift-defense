@@ -62,7 +62,26 @@ export interface SaveData {
     tutorialDone: boolean;
     /** Soundeffekte an */
     sound: boolean;
+    /** Entwicklermodus (zum Testen) */
+    dev: DevSettings;
   };
+}
+
+export interface DevSettings {
+  /** DEV-Knöpfe in Stadt und Kampf anzeigen */
+  enabled: boolean;
+  /** Ressourcen und Rift-Kristalle werden immer wieder aufgefüllt */
+  infinite: boolean;
+  /** Bauen und Forschen ohne Wartezeit */
+  instant: boolean;
+  /** Mit dieser Welle startet die Nacht */
+  startWave: number;
+  /** Echte Ressourcen vor „unendlich“ – kommen beim Ausschalten zurück */
+  backup: Resources | null;
+}
+
+export function defaultDev(): DevSettings {
+  return { enabled: false, infinite: false, instant: false, startWave: 1, backup: null };
 }
 
 export function emptyCity(): CityState {
@@ -78,7 +97,7 @@ export function defaultSave(seed = randomSeed()): SaveData {
     city: emptyCity(),
     cards: [],
     stats: { bestNight: 0, nightsWon: 0, defeats: 0, enemiesKilled: 0 },
-    settings: { speed: 1, tutorialDone: false, sound: true },
+    settings: { speed: 1, tutorialDone: false, sound: true, dev: defaultDev() },
   };
 }
 
@@ -107,7 +126,7 @@ export function migrateSave(raw: unknown): SaveData {
     city,
     cards: Array.isArray(r.cards) ? r.cards.filter((c): c is string => typeof c === 'string') : [],
     stats: { ...base.stats, ...(r.stats ?? {}) },
-    settings: { ...base.settings, ...(r.settings ?? {}) },
+    settings: { ...base.settings, ...(r.settings ?? {}), dev: { ...base.settings.dev, ...(r.settings?.dev ?? {}) } },
   };
 }
 

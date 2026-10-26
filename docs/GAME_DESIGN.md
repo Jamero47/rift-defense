@@ -228,6 +228,16 @@ Soundeffekte werden im Browser erzeugt (`src/services/sound.ts`, noch keine Audi
 Explosionen, Treffer am Tor, Beute, Wellen, Karten, Fähigkeiten, Bauen, Sieg/Niederlage, Rift-Übergang.
 „Ton: An/Aus“ im Hauptmenü und oben rechts in der Stadt. Später können echte Sounds unter denselben Namen eingesetzt werden.
 
+## Entwicklermodus (zum Testen)
+
+Hauptmenü → **Entwickler**. Dort:
+- **DEV-Knöpfe in Stadt und Kampf** – öffnen dasselbe Fenster direkt im Spiel.
+- **Unendliche Ressourcen** – Ressourcen und Rift-Kristalle werden immer aufgefüllt (Anzeige ∞).
+  Beim Ausschalten kommen die echten Ressourcen zurück.
+- **Sofort bauen & forschen** – keine Wartezeit.
+- **Nacht** und **Start-Welle** einstellen, dann „Nacht … ab Welle … starten“.
+- Im Kampf zusätzlich: zu einer Welle springen (zwischen den Wellen), Welle gewinnen, Nacht gewinnen.
+
 ## Rifts
 
 | Rift | Sondereffekt | Sonderfelder | Rohstoff-Felder | Spezial / Boss |

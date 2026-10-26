@@ -4,6 +4,8 @@ import type { WaveDef } from '../core/wavegen';
 import { RESOURCE_IDS } from '../core/types';
 import { getEnemy } from '../data/enemies';
 import { RESOURCES, RIFT_CRYSTAL } from '../data/resources';
+import { saveStore } from '../core/save';
+import { openDevPanel } from '../ui/devPanel';
 import { Button, COLORS, addText, drawPanel, pin } from '../ui/widgets';
 import { DEPTH, type BattleScene } from './BattleScene';
 
@@ -81,6 +83,15 @@ export class Hud {
     this.targetHint = addText(s, 640, 110, 'Tippe auf die Karte: Dort schlägt der Pfeilhagel ein!', 22, {
       origin: [0.5, 0.5], color: COLORS.gold, stroke: true,
     }).setDepth(DEPTH.menu).setVisible(false);
+    // Entwicklermodus: DEV-Knopf unter der Beute-Anzeige
+    if (saveStore.get().settings.dev.enabled) {
+      new Button(s, lp.x + lp.w / 2, ly + 46, lp.w, 40, 'DEV', () => openDevPanel(s, {
+        battle: {
+          night: s.setup.night, waveCount: s.waves.length,
+          jumpToWave: (w) => s.devJumpToWave(w), winWave: () => s.devWinWave(), winNight: () => s.devWinNight(),
+        },
+      }), { color: 0x0e7490, fontSize: 17 }).setDepth(d);
+    }
     // Die Leiste bleibt beim Verschieben der Karte stehen
     for (const obj of s.children.list) if (!before.has(obj)) pin(obj);
   }
