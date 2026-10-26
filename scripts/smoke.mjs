@@ -116,7 +116,11 @@ try {
   await wait(300);
   await shot('07-night-preview');
   await press('Verteidigen');
-  await wait(2200);
+  await wait(1100);
+  await shot('07b-rift-warp-out');
+  await wait(1300);
+  await shot('07c-rift-warp-in');
+  await wait(1500);
   // Story-Dialog wegklicken, falls vorhanden
   const story = await page.evaluate(() => window.rift.button('Zur Verteidigung'));
   if (story) await press('Zur Verteidigung');
@@ -189,7 +193,7 @@ try {
     // Kamera zurück zum Tor, dort stehen die Türme
     await page.evaluate(() => { const b = window.rift.battle(); b.cycleSpeed(); b.cycleSpeed(); b.cameras.main.setScroll(0, b.cameras.main.scrollY); });
     let shots = 0;
-    for (let tick = 0; tick < 700; tick++) {
+    for (let tick = 0; tick < 1400; tick++) {
       await wait(400);
       const scenes = await page.evaluate(() => window.rift.scenes());
       if (scenes.includes('Result')) break;
@@ -214,12 +218,14 @@ try {
     }
     const last = await page.evaluate(() => window.rift.battle().debugInfo());
     console.log('Ende:', JSON.stringify({ outcome: last.outcome, gateHp: last.gateHp, wave: last.wave, loot: last.loot, cards: last.cards }));
-    await wait(2500);
+    await wait(4000);
     await shot('17-result');
     const save = await page.evaluate(() => window.rift.save.get());
     console.log('Spielstand nach der Nacht:', JSON.stringify({ night: save.night, resources: save.resources, stats: save.stats }));
     await press('Zur Stadt');
-    await wait(600);
+    await wait(700);
+    await shot('18a-city-warp-in');
+    await wait(1500);
     await shot('18-city-after');
   }
 } finally {

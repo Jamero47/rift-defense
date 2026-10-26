@@ -99,7 +99,8 @@ Jede Forschung braucht ihre Vorgänger (Linien im Baum) und eine Universitäts-S
 ```
 Forstwirtschaft ─┬─ Fischerei ── Handel ── Karawanen
                  └─ Bergbau ── Kristallkunde ── Glücksspiel
-Schießpulver ────┬─ Belagerungskunst ── Ballistik ── Baukunst
+Schießpulver ────┬─ Belagerungskunst ── Ballistik ─┬─ Baukunst
+                 │                                └─ Meisterbaukunst (alle Türme +1 Stufe)
                  └─ Alchemie ── Sterndeutung
 Wehrtürme ── Glockenguss ── Glaube ── Gastfreundschaft
 ```
@@ -127,7 +128,8 @@ Belohnung: Die **Magiergilde** (mit Magiebaum) wird freigeschaltet.
 1. Ein Rift öffnet sich (Nacht 1–3: Urzeit, Tech, Weltraum; danach zufällig, Story-Nächte fest).
 2. Eine neue Karte entsteht: Weg(e), Sonderfelder, **Rohstoff-Felder** (Bäume, Felsen, Kristalle …).
    Die Karte ist **28 × 13 Felder** groß (größer als der Bildschirm, ohne sichtbares Raster) –
-   mit dem Finger verschieben. Die Wege sind dadurch länger.
+   mit dem Finger verschieben. Die Wege winden sich wie Straßen: meist geradeaus, sanfte Kurven,
+   ab und zu eine große Biegung oder ein schräges Stück; Ecken sind abgerundet, Gegner laufen die Kurven rund ab.
 3. Man startet mit Rift-Kristallen (200 + 30 pro Nacht + Stadt-Boni) und **beschwört Türme**.
    - Nur Türme, die die Stadt freigeschaltet hat.
    - **Limit pro Turmart** (z. B. 2 Bogentürme) und **maximale Turmstufe** – beides steigt durch Gebäude-Upgrades.
@@ -192,6 +194,16 @@ Bauernhof, Taverne), dem Magiebaum (Glückszauber) und Karten (Kleeblatt, Hufeis
 
 Zielwahl pro Turm (im Turmfenster umschaltbar): Erster · Stärkster · Nächster · Größte Gruppe.
 
+### Turmstufen
+
+| Stufe | Wie? | Was wird besser? |
+|---|---|---|
+| 1–3 | sofort im Kampf mit Rift-Kristallen | nur Grundwerte (Schaden, Tempo, Reichweite, Mana-Regeneration); passive Türme: Aura/Ertrag/Zivilisten |
+| 4 | + Gebäude-Upgrade („Verstärkte …“) **oder** Forschung „Meisterbaukunst“ | Grundwerte + Spezialwerte (größere Explosion, mehr Kettenziele, stärkeres Gift …) |
+| 5 | Gebäude-Upgrade **und** Forschung | noch stärker; Turmsockel leuchtet |
+
+Neu beschworene Türme kommen aus einem kleinen Rift.
+
 ### Turm-Werte (Fenster beim Antippen eines Turms)
 
 „Turm-Name Lvl. X“, darunter: Normaler Schaden · Magischer Schaden · Attack Speed · Range · Crit Chance ·
@@ -203,6 +215,18 @@ Zivilisten bzw. Ertrag.
 - Mana füllt sich **während der Wellen** mit „Mana Regeneration“ pro Sekunde. Bei vollem Mana löst der Turm
   seine Fähigkeit aus. Ist kein Gegner in Reichweite, wartet er mit vollem Mana.
 - Boni für Fähigkeiten: „Stärke der Fähigkeiten“ (Arkane Macht, Karten) und „Chance auf kostenlose Fähigkeit“ (Mana-Echo).
+
+## Übergang Tag ↔ Nacht
+
+- **Tag → Nacht:** Vor der Stadt öffnet sich ein Rift. Felder, Straße und Bäume werden hineingesaugt,
+  das Bild verzerrt sich, und die Kampfkarte „warpt“ aus dem Rift heraus (`src/ui/warp.ts`).
+- **Nacht → Tag:** Die Kampfkarte wird zurück in den Rift gezogen; in der Stadt kommt das Land vor dem Tor wieder heraus.
+
+## Sound
+
+Soundeffekte werden im Browser erzeugt (`src/services/sound.ts`, noch keine Audiodateien): Knöpfe, Schüsse je Turmart,
+Explosionen, Treffer am Tor, Beute, Wellen, Karten, Fähigkeiten, Bauen, Sieg/Niederlage, Rift-Übergang.
+„Ton: An/Aus“ im Hauptmenü und oben rechts in der Stadt. Später können echte Sounds unter denselben Namen eingesetzt werden.
 
 ## Rifts
 

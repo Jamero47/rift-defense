@@ -16,9 +16,11 @@ import { KING, KING_MAX_LEVEL } from '../data/king';
 import type { RiftDef, TileDef } from '../data/rifts';
 import { RIFT_CRYSTAL } from '../data/resources';
 import { getTower, type TowerDef, type TowerLevel } from '../data/towers';
-import { GROUND_VARIANTS, tileKey } from '../game/textures';
+import { GROUND_VARIANTS, shade, tileKey } from '../game/textures';
 import { ads } from '../services/ads';
+import { sfx, type SoundName } from '../services/sound';
 import { showCardDraft } from '../ui/cardDraft';
+import { riftBurst, warpIn, warpOut } from '../ui/warp';
 import { COLORS, addText, floatText, pin, showDialog } from '../ui/widgets';
 import { DropManager, type DropKind } from './drops';
 import { Civilian, Enemy, FLY_HEIGHT, Projectile, Tower, type HitInfo, type TargetMode, type TowerStats } from './entities';
@@ -107,6 +109,10 @@ export class BattleScene extends Phaser.Scene {
   availableTowers: string[] = [];
   /** Aktuelle Felder (abgebaute Rohstoffe werden zu Boden) */
   private tiles: string[][] = [];
+  /** Beim Start aus dem Rift hereinwarpen (Wechsel Tag → Nacht) */
+  private warpOnStart = false;
+  /** Mittellinie der Straßen (mit runden Kurven) */
+  private roadLines: Vec[][] = [];
   private tileImages: Phaser.GameObjects.Image[][] = [];
 
   /** Rift-Kristalle: Währung im Kampf */
@@ -179,8 +185,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   /** Phaser verwendet die Szene wieder – deshalb hier alles zurücksetzen. */
-  init(data: { night?: number }): void {
+  init(data: { night?: number; warp?: boolean }): void {
     const save = saveStore.get();
+    this.warpOnStart = !!data.warp;
     this.setup = setupNight(save.seed, data.night ?? save.night);
     this.rift = this.setup.rift;
     this.waves = this.setup.waves;
@@ -255,7 +262,8 @@ export class BattleScene extends Phaser.Scene {
     });
     this.hud.setPreview(this.waves[0]);
     this.showTutorial();
-    this.banner(`Nacht ${this.setup.night}`, this.rift.name, this.rift.color);
+    if (this.warpOnStart) warpIn(this, this.rift.color, 1100, () => this.banner(`Nacht ${this.setup.night}`, this.rift.name, this.rift.color));
+    else this.banner(`Nacht ${this.setup.night}`, this.rift.name, this.rift.color);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.drops.flushAll());
     const story = this.setup.story;
     if (story && !saveStore.get().city.story.includes(story.id)) {
@@ -283,10 +291,12 @@ export class BattleScene extends Phaser.Scene {
     const center = (p: GridPos): Vec => ({ x: MAP_X + p.col * TILE + TILE / 2, y: MAP_Y + p.row * TILE + TILE / 2 });
     const gate: Vec = { x: GATE_X, y: MAP_Y + GATE_ROW * TILE + TILE / 2 };
     const spawnX = MAP_X + COLS * TILE + 26;
-    this.routes = this.setup.map.paths.map((path) => {
+    // Laufweg mit runden Kurven – genau dort, wo auch die Straße gezeichnet wird
+    this.roadLines = this.setup.map.paths.map((path) => {
       const pts = path.map(center);
-      return new Route(simplifyPoints([{ x: spawnX, y: pts[0].y }, ...pts, gate]));
+      return smoothCorners(straightenStairs(simplifyPoints([{ x: spawnX, y: pts[0].y }, ...pts, gate])), TILE / 2);
     });
+    this.routes = this.roadLines.map((pts) => new Route(pts));
     const start = this.setup.map.paths[0][0];
     this.airRoute = new Route([{ x: spawnX, y: center(start).y }, gate]);
   }
@@ -305,31 +315,14 @@ export class BattleScene extends Phaser.Scene {
       this.tileImages.push([]);
       for (let col = 0; col < COLS; col++) {
         const tile = this.tileAt(col, row);
-        const img = this.add.image(MAP_X + col * TILE + TILE / 2, MAP_Y + row * TILE + TILE / 2, this.tileTexture(col, row, tiles[row][col])).setDepth(DEPTH.tiles);
+        const img = this.add.image(MAP_X + col * TILE + TILE / 2, MAP_Y + row * TILE + TILE / 2, this.tileTexture(col, row, tiles[row][col]))
+          .setDepth(tile.path && tiles[row][col] !== 'path' ? DEPTH.pathEdge + 0.5 : DEPTH.tiles);
         // Texturen zeigen nach links (Winkel π) – passend zur Laufrichtung drehen
         if (tile.deco === 'conveyor') img.setRotation((direction.get(`${col},${row}`) ?? Math.PI) - Math.PI);
         this.tileImages[row].push(img);
       }
     }
-    // Wegränder
-    const g = this.add.graphics().setDepth(DEPTH.pathEdge);
-    const isPath = (c: number, r: number) => {
-      if (c >= COLS || c < 0) return r >= 0 && r < ROWS && this.tileAt(c < 0 ? 0 : COLS - 1, r).path;
-      if (r < 0 || r >= ROWS) return false;
-      return this.tileAt(c, r).path;
-    };
-    for (let row = 0; row < ROWS; row++) {
-      for (let col = 0; col < COLS; col++) {
-        if (!this.tileAt(col, row).path) continue;
-        const x = MAP_X + col * TILE;
-        const y = MAP_Y + row * TILE;
-        g.lineStyle(4, 0x000000, 0.28);
-        if (!isPath(col, row - 1)) g.lineBetween(x, y + 2, x + TILE, y + 2);
-        if (!isPath(col, row + 1)) g.lineBetween(x, y + TILE - 2, x + TILE, y + TILE - 2);
-        if (!isPath(col - 1, row) && col > 0) g.lineBetween(x + 2, y, x + 2, y + TILE);
-        if (!isPath(col + 1, row) && col < COLS - 1) g.lineBetween(x + TILE - 2, y, x + TILE - 2, y + TILE);
-      }
-    }
+    this.drawRoads();
     // Portale am Wegbeginn
     const starts = new Set(this.setup.map.paths.map((p) => p[0].row));
     for (const row of starts) {
@@ -339,6 +332,47 @@ export class BattleScene extends Phaser.Scene {
       this.tweens.add({ targets: swirl, angle: 360, duration: 4000, repeat: -1 });
       this.tweens.add({ targets: portal, scale: 0.82, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
+  }
+
+  /**
+   * Straßen als weiche Linien über dem Boden: Rand, Belag und ein paar Steinchen.
+   * Einmal in ein Bild gezeichnet (Canvas), damit es auf dem Handy nicht jedes Bild neu berechnet wird.
+   */
+  private drawRoads(): void {
+    const key = 'roads';
+    if (this.textures.exists(key)) this.textures.remove(key);
+    const tex = this.textures.createCanvas(key, WORLD_WIDTH, WORLD_HEIGHT);
+    if (!tex) return;
+    const ctx = tex.getContext();
+    const color = this.rift.tiles.path.color;
+    const width = TILE * 0.8;
+    const rgb = (c: number, a = 1) => `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`;
+    const stroke = (w: number, style: string) => {
+      ctx.lineWidth = w;
+      ctx.strokeStyle = style;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      for (const line of this.roadLines) {
+        ctx.beginPath();
+        ctx.moveTo(line[0].x, line[0].y);
+        for (const p of line.slice(1)) ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
+    };
+    stroke(width + 10, rgb(shade(color, -0.45), 0.55));
+    stroke(width, rgb(color));
+    stroke(width * 0.35, rgb(shade(color, 0.08), 0.5)); // hellere Mitte (festgetretene Spur)
+    const rng = new Rng(this.setup.seed ^ 0x5eed);
+    for (const line of this.roadLines) {
+      for (const p of densify(line, 14)) {
+        ctx.fillStyle = rgb(shade(color, rng.next() < 0.5 ? 0.22 : -0.22), 0.5);
+        ctx.beginPath();
+        ctx.ellipse(p.x + (rng.next() - 0.5) * width * 0.75, p.y + (rng.next() - 0.5) * width * 0.75, rng.float(1.5, 3.5), rng.float(1, 2.2), rng.next() * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    tex.refresh();
+    this.add.image(0, 0, key).setOrigin(0, 0).setDepth(DEPTH.pathEdge);
   }
 
   private drawWall(): void {
@@ -385,6 +419,7 @@ export class BattleScene extends Phaser.Scene {
 
   private setupCamera(): void {
     const cam = this.cameras.main;
+    cam.setZoom(1).setRotation(0);
     cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     // Start: Tor in der Mitte des sichtbaren Bereichs (unter der Leiste)
     const gateY = MAP_Y + GATE_ROW * TILE + TILE / 2;
@@ -462,6 +497,7 @@ export class BattleScene extends Phaser.Scene {
 
   /** Boden bekommt eine von mehreren Varianten, damit kein Raster sichtbar ist */
   private tileTexture(col: number, row: number, id: string): string {
+    if (id === 'path') id = 'ground'; // die Straße wird darüber gezeichnet (drawRoads)
     if (id !== 'ground') return tileKey(this.rift.id, id);
     const v = Math.abs((col * 73856093) ^ (row * 19349663) ^ this.setup.seed) % GROUND_VARIANTS;
     return v === 0 ? tileKey(this.rift.id, id) : `${tileKey(this.rift.id, id)}_${v}`;
@@ -575,10 +611,18 @@ export class BattleScene extends Phaser.Scene {
     }
     if (this.crystals < cost) {
       floatText(this, c.x, c.y, 'Nicht genug Rift-Kristalle', COLORS.bad);
+      sfx.play('error');
       return false;
     }
     this.crystals -= cost;
     const tower = new Tower(this, def, cell.col, cell.row, c.x, c.y, tile, DEPTH.towers);
+    // Der Turm kommt aus einem kleinen Rift
+    riftBurst(this, c.x, c.y + 4, this.rift.color, 90, 650, DEPTH.towers - 1);
+    for (const img of [tower.base, tower.top]) {
+      img.setScale(0).setAlpha(0);
+      this.tweens.add({ targets: img, scale: 1, alpha: 1, duration: 380, delay: 160, ease: 'Back.easeOut' });
+    }
+    sfx.play('build');
     tower.spent = cost;
     tower.stats = this.computeTowerStats(def, 1, tile);
     if (def.targetMode) tower.targetMode = def.targetMode;
@@ -586,7 +630,6 @@ export class BattleScene extends Phaser.Scene {
     if (def.attack === 'none') tower.top.setRotation(-Math.PI / 2);
     this.towers.push(tower);
     this.towerAt[cell.row][cell.col] = tower;
-    this.ringFx(c.x, c.y, 0xffffff, 0.6);
     if (this.tutorialStep === 0) this.advanceTutorial();
     return true;
   }
@@ -596,6 +639,7 @@ export class BattleScene extends Phaser.Scene {
     const cost = this.towerCost(t.def.levels[t.level]);
     if (this.crystals < cost) {
       floatText(this, t.x, t.y, 'Nicht genug Rift-Kristalle', COLORS.bad);
+      sfx.play('error');
       return false;
     }
     this.crystals -= cost;
@@ -603,6 +647,7 @@ export class BattleScene extends Phaser.Scene {
     t.setLevel(t.level + 1);
     t.stats = this.computeTowerStats(t.def, t.level, t.tile);
     this.ringFx(t.x, t.y, 0xfacc15, 0.7);
+    sfx.play('upgrade');
     return true;
   }
 
@@ -611,6 +656,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   sellTower(t: Tower): void {
+    sfx.play('sell');
     this.crystals += this.sellValue(t);
     floatText(this, t.x, t.y, `+${this.sellValue(t)}`, RIFT_CRYSTAL.color);
     this.towerAt[t.row][t.col] = null;
@@ -653,6 +699,7 @@ export class BattleScene extends Phaser.Scene {
     this.waveTime = 0;
     this.phase = 'wave';
     const sub = wave.isBoss ? 'Ein Boss kommt!' : wave.hasAir ? 'Achtung: Fluggegner!' : '';
+    sfx.play('waveStart');
     this.banner(`Welle ${wave.number}`, sub, wave.isBoss ? 0xef4444 : wave.hasAir ? 0x7dd3fc : 0xf3e6c4);
     if (this.tutorialStep === 1) this.advanceTutorial();
   }
@@ -662,6 +709,7 @@ export class BattleScene extends Phaser.Scene {
     const bonus = BALANCE.waveClearCrystalsBase + BALANCE.waveClearCrystalsPerWave * this.waveIndex;
     const interest = Math.min(50, Math.floor(this.crystals * this.mods.flat('interest')));
     this.crystals += bonus + interest;
+    sfx.play('waveClear');
     floatText(this, GAME_WIDTH / 2, MAP_Y + 140, `Welle geschafft! +${bonus + interest} Rift-Kristalle`, RIFT_CRYSTAL.color, 26, true);
     const heal = Math.floor(this.mods.flat('gateRegen'));
     if (heal > 0 && this.gateHp < this.gateMaxHp) {
@@ -685,6 +733,7 @@ export class BattleScene extends Phaser.Scene {
 
   openDraft(): void {
     this.phase = 'draft';
+    sfx.play('cards');
     this.menus.close();
     const luck = this.luck() + this.draftsDone; // spätere Karten werden besser
     const tags = new Set(this.availableTowers.flatMap((id) => getTower(id).tags));
@@ -909,6 +958,7 @@ export class BattleScene extends Phaser.Scene {
     e.destroy();
     this.gateHp = Math.max(0, this.gateHp - e.def.gateDamage);
     this.cameras.main.shake(140, 0.005);
+    sfx.play('gateHit');
     this.gateFlash.setFillStyle(0xff0000, 0.6);
     this.tweens.add({ targets: this.gateFlash, fillAlpha: 0, duration: 300 });
     floatText(this, 120, this.kingPos.y + 60, `−${e.def.gateDamage}`, COLORS.bad, 24);
@@ -1086,6 +1136,7 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     floatText(this, t.x, t.y - 34, a.name, '#93c5fd', 15);
+    sfx.play('ability');
   }
 
   private knockBack(e: Enemy, px: number): void {
@@ -1114,6 +1165,7 @@ export class BattleScene extends Phaser.Scene {
 
   private fireTower(t: Tower, targets: Enemy[]): void {
     const info = this.hitInfo(t);
+    sfx.play(t.def.attack === 'chain' ? 'zap' : SHOOT_SOUND[t.def.projectile.style] ?? 'shootArrow');
     if (t.def.attack === 'chain') {
       this.chainLightning(t, targets[0], info);
       return;
@@ -1237,6 +1289,7 @@ export class BattleScene extends Phaser.Scene {
       offset += 20;
     }
     this.tiles[cell.row][cell.col] = 'ground';
+    sfx.play('harvest');
     this.tileImages[cell.row]?.[cell.col]?.setTexture(tileKey(this.rift.id, 'ground'));
     this.burstFx(c.x, c.y, 0xfde68a, 1.2);
   }
@@ -1371,6 +1424,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private creditDrop(kind: DropKind, amount: number): void {
+    sfx.play(kind === 'crystal' ? 'crystal' : 'gold');
     if (kind === 'crystal') this.crystals += amount;
     else this.loot[kind] += amount;
   }
@@ -1407,6 +1461,7 @@ export class BattleScene extends Phaser.Scene {
         }
       }
       this.burstFx(p.tx, p.ty, 0xf59e0b, info.splash / 30);
+      sfx.play('explosion');
     } else if (p.target?.alive) {
       this.applyEffects(p.target, info);
       this.damageEnemy(p.target, info);
@@ -1475,12 +1530,14 @@ export class BattleScene extends Phaser.Scene {
       this.drops.spawn(e.x, e.y - 10, 'magie', Math.max(1, Math.round(2 * lootMul)));
       this.drops.spawn(e.x + 12, e.y - 10, 'gold', Math.max(2, Math.round((e.def.crystals / 2) * lootMul)));
       floatText(this, e.x, e.y - 34, 'Seltener Fund!', '#4ade80', 16);
+      sfx.play('rare');
     }
     for (const id of RESOURCE_IDS) {
       const v = e.def.loot?.[id];
       if (v) this.drops.spawn(e.x - 8, e.y, id, Math.round(v * lootMul));
     }
     this.burstFx(e.x, e.y, e.def.look.body, e.def.radius / 22);
+    sfx.play(e.def.boss ? 'bossDeath' : 'death');
     e.destroy();
     for (const a of e.def.abilities ?? []) {
       if (a.type === 'spawnOnDeath') {
@@ -1503,6 +1560,7 @@ export class BattleScene extends Phaser.Scene {
     this.abilityCooldown = k.abilityCooldown;
     const radius = KING.ability.radius * TILE;
     const hits = KING.ability.hits;
+    sfx.play('arrowRain');
     for (let i = 0; i < hits; i++) this.strikes.push({ t: 0.25 + i * 0.25, x, y, damage: k.abilityDamage / hits, radius });
     // Pfeile regnen herab
     for (let i = 0; i < 14; i++) {
@@ -1553,11 +1611,13 @@ export class BattleScene extends Phaser.Scene {
       if (BALANCE.cardsPersistAcrossNights) d.cards = [...this.cards];
     });
     this.banner('Sieg!', 'Die Nacht ist überstanden', 0xfacc15);
+    sfx.play('victory');
     this.time.delayedCall(1800, () => this.goToResult(true, rewards, newStory?.outro, newStory?.unlocksBuilding));
   }
 
   private defeat(): void {
     this.phase = 'ended';
+    sfx.play('defeat');
     this.menus.close();
     this.setAbilityTargeting(false);
     const waveNo = this.waveIndex + 1;
@@ -1603,7 +1663,10 @@ export class BattleScene extends Phaser.Scene {
       victory, night: this.setup.night, riftId: this.rift.id, wavesCleared: this.waveIndex,
       totalWaves: this.waves.length, kills: this.kills, rewards, storyText, unlockedBuilding,
     };
-    this.scene.start('Result', data);
+    // Die Nachtkarte wird zurück in den Rift gesaugt
+    const cam = this.cameras.main;
+    this.menus.close();
+    warpOut(this, cam.scrollX + cam.width / 2, cam.scrollY + cam.height / 2, this.rift.color, () => this.scene.start('Result', data), 1000);
   }
 
   togglePause(): void {
@@ -1769,3 +1832,53 @@ function distToSegment(p: Vec, a: Vec, b: Vec): number {
   const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
   return Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
 }
+
+/** Rundet die Ecken eines Linienzugs ab (Bogen mit höchstens `radius`), für Straßen und Laufwege. */
+function smoothCorners(pts: readonly Vec[], radius: number): Vec[] {
+  if (pts.length < 3) return [...pts];
+  const out: Vec[] = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const c = pts[i + 1];
+    const lab = Math.hypot(a.x - b.x, a.y - b.y);
+    const lbc = Math.hypot(c.x - b.x, c.y - b.y);
+    const rad = Math.min(radius, lab / 2, lbc / 2);
+    const p1 = { x: b.x + ((a.x - b.x) / lab) * rad, y: b.y + ((a.y - b.y) / lab) * rad };
+    const p2 = { x: b.x + ((c.x - b.x) / lbc) * rad, y: b.y + ((c.y - b.y) / lbc) * rad };
+    // Quadratische Kurve p1 → (b) → p2
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6;
+      const u = 1 - t;
+      out.push({ x: u * u * p1.x + 2 * u * t * b.x + t * t * p2.x, y: u * u * p1.y + 2 * u * t * b.y + t * t * p2.y });
+    }
+  }
+  out.push(pts[pts.length - 1]);
+  // doppelte Punkte entfernen (Route braucht Abstände > 0)
+  return out.filter((p, i) => i === 0 || Math.hypot(p.x - out[i - 1].x, p.y - out[i - 1].y) > 0.01);
+}
+
+/** Treppen aus lauter 1-Feld-Stufen werden zu einer geraden, schrägen Linie. */
+function straightenStairs(pts: readonly Vec[]): Vec[] {
+  const short = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.y - b.y) <= TILE + 1;
+  return pts.filter((p, i) => i === 0 || i === pts.length - 1 || !(short(pts[i - 1], p) && short(p, pts[i + 1])));
+}
+
+/** Punkte im Abstand `step` entlang eines Linienzugs. */
+function densify(pts: readonly Vec[], step: number): Vec[] {
+  const out: Vec[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / step));
+    for (let k = 0; k < n; k++) out.push({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n });
+  }
+  if (pts.length) out.push(pts[pts.length - 1]);
+  return out;
+}
+
+/** Schuss-Geräusch je Geschoss-Art */
+const SHOOT_SOUND: Partial<Record<string, SoundName>> = {
+  arrow: 'shootArrow', bolt: 'shootArrow', ball: 'shootHeavy', rock: 'shootHeavy', shard: 'shootMagic',
+  orb: 'shootMagic', royal: 'shootArrow', glob: 'shootGlob', gust: 'shootGust',
+};

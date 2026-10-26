@@ -20,7 +20,10 @@ import { RESEARCH, RESEARCH_TREES, getResearch, type ResearchDef, type ResearchT
 import { RESOURCES } from '../data/resources';
 import { storyForNight } from '../data/story';
 import { getTower } from '../data/towers';
-import { Button, COLORS, addText, drawPanel } from '../ui/widgets';
+import { sfx } from '../services/sound';
+import { riftBurst, warpIn, warpOut } from '../ui/warp';
+import { getRift } from '../data/rifts';
+import { Button, COLORS, addText, drawPanel, soundToggle } from '../ui/widgets';
 
 // Die Tag-Sphäre: die eigene Stadt mit Bauplätzen.
 // Bauplätze antippen → bauen, ausbauen, Upgrades kaufen, forschen. Rechts geht es in die Nacht.
@@ -68,8 +71,21 @@ export class CityScene extends Phaser.Scene {
     super('City');
   }
 
+  /** Rift-ID der letzten Nacht, wenn die Stadt aus dem Rift hereinwarpen soll */
+  private warpFrom: string | null = null;
+  /** Grafik des Lands vor dem Tor (wird beim Nachtwechsel in den Rift gesaugt) */
+  private outside: Phaser.GameObjects.GameObject[] = [];
+
+  init(data: { warp?: string }): void {
+    this.warpFrom = data?.warp ?? null;
+  }
+
   create(): void {
+    // Szenen werden wiederverwendet: Eingabe und Kamera nach einem Rift-Übergang zurücksetzen
+    this.input.enabled = true;
+    this.cameras.main.setZoom(1).setRotation(0).setScroll(0, 0);
     this.panel = null;
+    this.outside = [];
     this.hint = null;
     this.resTexts = [];
     this.toastCount = 0;
@@ -83,6 +99,55 @@ export class CityScene extends Phaser.Scene {
     this.drawNightButton();
     this.renderPlots();
     this.renderHint();
+    if (this.warpFrom) this.warpBackIn(getRift(this.warpFrom).color);
+  }
+
+  // ================================================================ Rift-Übergang Tag ↔ Nacht
+
+  /** Mittelpunkt des Lands vor dem Tor – dort öffnet sich der Rift */
+  private static readonly RIFT_POINT = { x: 1095, y: 385 };
+
+  /** Alles rechts von der Mauer (Felder, Straße, Nacht-Knopf) */
+  private outsideObjects(): Phaser.GameObjects.Components.Transform[] {
+    const plots = (this.plotLayer.list as Phaser.GameObjects.Container[]).filter((c) => c.x > 905);
+    return [...plots, this.nightBtn, ...(this.outside as unknown as Phaser.GameObjects.Components.Transform[])];
+  }
+
+  /** Tag → Nacht: Das Land vor der Stadt wird in einen Rift gesaugt, dann beginnt der Kampf. */
+  private startNightWarp(night: number): void {
+    this.closePanel();
+    this.hint?.destroy();
+    this.input.enabled = false;
+    const save = saveStore.get();
+    const color = riftForNight(save.seed, night).color;
+    const { x, y } = CityScene.RIFT_POINT;
+    riftBurst(this, x, y, color, 360, 1800, 30);
+    const objs = this.outsideObjects();
+    objs.forEach((o, i) => {
+      const d = Math.hypot(o.x - x, o.y - y);
+      this.tweens.add({
+        targets: o, x, y, scale: 0, angle: 300, alpha: 0, duration: 650, delay: 120 + d * 0.6 + i * 15, ease: 'Cubic.easeIn',
+      });
+    });
+    this.progressGfx.clear();
+    sfx.play('warpOut');
+    this.time.delayedCall(650, () => warpOut(this, x, y, color, () => this.scene.start('Battle', { night, warp: true }), 1100));
+  }
+
+  /** Nacht → Tag: Das Land vor der Stadt kommt aus dem Rift zurück. */
+  private warpBackIn(color: number): void {
+    const { x, y } = CityScene.RIFT_POINT;
+    warpIn(this, color, 900);
+    riftBurst(this, x, y, color, 360, 1500, 30);
+    this.outsideObjects().forEach((o, i) => {
+      const target = { x: o.x, y: o.y };
+      const go = o as unknown as Phaser.GameObjects.Components.Transform & Phaser.GameObjects.Components.Alpha;
+      go.setPosition(x, y);
+      go.setScale(0);
+      go.setAlpha(0);
+      go.setAngle(-240);
+      this.tweens.add({ targets: go, ...target, scale: 1, alpha: 1, angle: 0, duration: 600, delay: 500 + i * 40, ease: 'Back.easeOut' });
+    });
   }
 
   update(time: number): void {
@@ -104,6 +169,7 @@ export class CityScene extends Phaser.Scene {
     let messages: string[] = [];
     saveStore.update((d) => (messages = completeJobs(d, now)));
     if (!announce) return;
+    if (messages.length) sfx.play('buildingDone');
     for (const m of messages) this.toast(m);
     this.refreshAll();
   }
@@ -137,21 +203,25 @@ export class CityScene extends Phaser.Scene {
       g.fillStyle(rng.chance(0.5) ? 0x55883f : 0x7aaa58, 0.45);
       g.fillEllipse(rng.float(0, GAME_WIDTH), rng.float(HUD_H, GAME_HEIGHT), rng.float(30, 90), rng.float(14, 36));
     }
-    // Straße vom Tor zum Rift
-    g.fillStyle(0x9b7b52, 1);
-    g.fillRect(900, 357, GAME_WIDTH - 900, 56);
-    g.lineStyle(3, 0x6f5536, 0.6);
-    g.lineBetween(900, 357, GAME_WIDTH, 357);
-    g.lineBetween(900, 413, GAME_WIDTH, 413);
+    // Straße vom Tor zum Rift (eigene Grafik: wird beim Nachtwechsel in den Rift gesaugt)
+    const road = this.add.graphics({ x: 1090, y: 385 });
+    road.fillStyle(0x9b7b52, 1);
+    road.fillRect(900 - 1090, -28, GAME_WIDTH - 900, 56);
+    road.lineStyle(3, 0x6f5536, 0.6);
+    road.lineBetween(900 - 1090, -28, GAME_WIDTH - 1090, -28);
+    road.lineBetween(900 - 1090, 28, GAME_WIDTH - 1090, 28);
+    this.outside.push(road);
 
     // Bäume außerhalb der Mauer (Deko)
     for (const [x, y] of [[1255, 210], [1250, 600], [1160, 680], [930, 700], [1255, 440]]) {
-      g.fillStyle(0x000000, 0.2);
-      g.fillEllipse(x + 4, y + 16, 40, 12);
-      g.fillStyle(0x2f6b2a, 1);
-      g.fillCircle(x, y, 20);
-      g.fillStyle(0x3f8a38, 1);
-      g.fillCircle(x - 6, y - 6, 12);
+      const tree = this.add.graphics({ x, y });
+      tree.fillStyle(0x000000, 0.2);
+      tree.fillEllipse(4, 16, 40, 12);
+      tree.fillStyle(0x2f6b2a, 1);
+      tree.fillCircle(0, 0, 20);
+      tree.fillStyle(0x3f8a38, 1);
+      tree.fillCircle(-6, -6, 12);
+      this.outside.push(tree);
     }
 
     // Berg, an den sich die Stadt lehnt
@@ -194,7 +264,7 @@ export class CityScene extends Phaser.Scene {
     const rift = riftForNight(save.seed, save.night);
     const glow = this.add.image(GAME_WIDTH - 10, 385, 'fx_glow').setTint(rift.color).setScale(3.2).setAlpha(0.45);
     this.tweens.add({ targets: glow, alpha: 0.75, duration: 1400, yoyo: true, repeat: -1 });
-    this.add.image(GAME_WIDTH - 6, 385, `portal_${rift.id}`).setScale(0.5).setAlpha(0.8);
+    this.outside.push(this.add.image(GAME_WIDTH - 6, 385, `portal_${rift.id}`).setScale(0.5).setAlpha(0.8));
   }
 
   private drawHud(): void {
@@ -202,10 +272,11 @@ export class CityScene extends Phaser.Scene {
     g.fillStyle(0x0b0d1a, 0.92);
     g.fillRect(0, 0, GAME_WIDTH, HUD_H);
     new Button(this, 56, 32, 96, 46, 'Menü', () => this.scene.start('Menu'), { color: COLORS.buttonAlt, fontSize: 18 }).setDepth(51);
+    soundToggle(this, 1236, 32, 76, 46, true).setDepth(51);
     addText(this, 116, 20, 'Deine Stadt', 24, { origin: [0, 0.5] }).setDepth(51);
     this.subtitle = addText(this, 116, 46, '', 14, { origin: [0, 0.5], color: COLORS.muted }).setDepth(51);
     this.resTexts = RESOURCE_IDS.map((id, i) => {
-      const x = 430 + i * 168;
+      const x = 400 + i * 160;
       this.add.image(x, 32, RESOURCES[id].icon).setScale(0.75).setDepth(51);
       return addText(this, x + 22, 32, '', 22, { origin: [0, 0.5] }).setDepth(51);
     });
@@ -831,7 +902,7 @@ export class CityScene extends Phaser.Scene {
     }));
     const check = canStartNight(save.city);
     if (!check.ok && check.reason) root.add(addText(this, 24, 470, check.reason, 16, { color: COLORS.bad, wrap: 630 }));
-    root.add(new Button(this, 340, 548, 400, 70, 'Verteidigen!', () => this.scene.start('Battle', { night }), {
+    root.add(new Button(this, 340, 548, 400, 70, 'Verteidigen!', () => this.startNightWarp(night), {
       enabled: check.ok, fontSize: 30,
     }));
   }

@@ -143,15 +143,15 @@ export const BUILDINGS: readonly BuildingDef[] = [
         modifiers: [{ stat: 'towerLimit', kind: 'flat', value: 1, towerTags: ['antiair'] }],
       },
       {
-        id: 'bogenturm_stufen', name: 'Verstärkte Bogentürme', icon: 'tower_base_3', maxRank: 2,
-        description: 'Bogentürme können im Kampf 1 Stufe höher verbessert werden.',
-        costs: costs({ holz: 50, stein: 40, gold: 40 }, 2, 2), requiredLevel: [1, 2],
+        id: 'bogenturm_stufen', name: 'Verstärkte Bogentürme', icon: 'tower_base_3', maxRank: 1,
+        description: 'Bogentürme können im Kampf bis Stufe 4 verbessert werden (Stufe 5: Forschung »Meisterbaukunst«).',
+        costs: costs({ holz: 50, stein: 40, gold: 40 }, 1), requiredLevel: [2],
         modifiers: [{ stat: 'towerMaxLevel', kind: 'flat', value: 1, towerTags: ['bow'] }],
       },
       {
-        id: 'ballista_stufen', name: 'Verstärkte Ballisten', icon: 'tower_base_3', maxRank: 2,
-        description: 'Ballisten können im Kampf 1 Stufe höher verbessert werden.',
-        costs: costs({ holz: 60, stein: 50, gold: 50 }, 2, 2), requiredLevel: [2, 3],
+        id: 'ballista_stufen', name: 'Verstärkte Ballisten', icon: 'tower_base_3', maxRank: 1,
+        description: 'Ballisten können im Kampf bis Stufe 4 verbessert werden (Stufe 5: Forschung »Meisterbaukunst«).',
+        costs: costs({ holz: 60, stein: 50, gold: 50 }, 1), requiredLevel: [3],
         modifiers: [{ stat: 'towerMaxLevel', kind: 'flat', value: 1, towerTags: ['antiair'] }],
       },
       {
@@ -310,9 +310,9 @@ export const BUILDINGS: readonly BuildingDef[] = [
         modifiers: [{ stat: 'towerLimit', kind: 'flat', value: 1, towerTags: ['cannon'] }],
       },
       {
-        id: 'kanonen_stufen', name: 'Verstärkte Kanonen', icon: 'tower_base_3', maxRank: 2,
-        description: 'Kanonentürme können im Kampf 1 Stufe höher verbessert werden.',
-        costs: costs({ stein: 80, gold: 80 }, 2, 2), requiredLevel: [1, 2],
+        id: 'kanonen_stufen', name: 'Verstärkte Kanonen', icon: 'tower_base_3', maxRank: 1,
+        description: 'Kanonentürme können im Kampf bis Stufe 4 verbessert werden (Stufe 5: Forschung »Meisterbaukunst«).',
+        costs: costs({ stein: 80, gold: 80 }, 1), requiredLevel: [2],
         modifiers: [{ stat: 'towerMaxLevel', kind: 'flat', value: 1, towerTags: ['cannon'] }],
       },
       {
@@ -359,9 +359,9 @@ export const BUILDINGS: readonly BuildingDef[] = [
         modifiers: [{ stat: 'towerLimit', kind: 'flat', value: 1, towerTags: ['frost'] }],
       },
       {
-        id: 'magie_stufen', name: 'Höhere Magie', icon: 'tower_base_3', maxRank: 2,
-        description: 'Magier- und Frosttürme können 1 Stufe höher verbessert werden.',
-        costs: costs({ magie: 60, gold: 80 }, 2, 2), requiredLevel: [1, 2],
+        id: 'magie_stufen', name: 'Höhere Magie', icon: 'tower_base_3', maxRank: 1,
+        description: 'Magie-Türme können im Kampf bis Stufe 4 verbessert werden (Stufe 5: Forschung »Meisterbaukunst«).',
+        costs: costs({ magie: 60, gold: 80 }, 1), requiredLevel: [2],
         modifiers: [{ stat: 'towerMaxLevel', kind: 'flat', value: 1, towerTags: ['magic'] }],
       },
       {
@@ -488,9 +488,9 @@ export const BUILDINGS: readonly BuildingDef[] = [
         modifiers: [{ stat: 'towerLimit', kind: 'flat', value: 1, towerTags: ['catapult'] }],
       },
       {
-        id: 'katapult_stufen', name: 'Verstärkte Katapulte', icon: 'tower_base_3', maxRank: 2,
-        description: 'Katapulte können im Kampf 1 Stufe höher verbessert werden.',
-        costs: costs({ holz: 90, stein: 70, gold: 80 }, 2, 2), requiredLevel: [1, 2],
+        id: 'katapult_stufen', name: 'Verstärkte Katapulte', icon: 'tower_base_3', maxRank: 1,
+        description: 'Katapulte können im Kampf bis Stufe 4 verbessert werden (Stufe 5: Forschung »Meisterbaukunst«).',
+        costs: costs({ holz: 90, stein: 70, gold: 80 }, 1), requiredLevel: [2],
         modifiers: [{ stat: 'towerMaxLevel', kind: 'flat', value: 1, towerTags: ['catapult'] }],
       },
       {
@@ -527,9 +527,9 @@ export const BUILDINGS: readonly BuildingDef[] = [
         modifiers: [{ stat: 'towerLimit', kind: 'flat', value: 1, towerTags: ['poison'] }],
       },
       {
-        id: 'gift_stufen', name: 'Starke Gifte', icon: 'tower_base_3', maxRank: 2,
-        description: 'Gifttürme können im Kampf 1 Stufe höher verbessert werden.',
-        costs: costs({ nahrung: 60, magie: 30, gold: 60 }, 2, 2), requiredLevel: [1, 2],
+        id: 'gift_stufen', name: 'Starke Gifte', icon: 'tower_base_3', maxRank: 1,
+        description: 'Gifttürme können im Kampf bis Stufe 4 verbessert werden (Stufe 5: Forschung »Meisterbaukunst«).',
+        costs: costs({ nahrung: 60, magie: 30, gold: 60 }, 1), requiredLevel: [2],
         modifiers: [{ stat: 'towerMaxLevel', kind: 'flat', value: 1, towerTags: ['poison'] }],
       },
       {
@@ -565,9 +565,9 @@ export const BUILDINGS: readonly BuildingDef[] = [
         modifiers: [{ stat: 'towerLimit', kind: 'flat', value: 1, towerTags: ['bell'] }],
       },
       {
-        id: 'glocken_stufen', name: 'Große Glocken', icon: 'tower_base_3', maxRank: 2,
-        description: 'Glockentürme können im Kampf 1 Stufe höher verbessert werden.',
-        costs: costs({ stein: 90, gold: 80 }, 2, 2), requiredLevel: [1, 2],
+        id: 'glocken_stufen', name: 'Große Glocken', icon: 'tower_base_3', maxRank: 1,
+        description: 'Glockentürme können im Kampf bis Stufe 4 verbessert werden (Stufe 5: Forschung »Meisterbaukunst«).',
+        costs: costs({ stein: 90, gold: 80 }, 1), requiredLevel: [2],
         modifiers: [{ stat: 'towerMaxLevel', kind: 'flat', value: 1, towerTags: ['bell'] }],
       },
       {
@@ -604,9 +604,9 @@ export const BUILDINGS: readonly BuildingDef[] = [
         modifiers: [{ stat: 'towerLimit', kind: 'flat', value: 1, towerTags: ['gatherer'] }],
       },
       {
-        id: 'sammler_stufen', name: 'Große Karawanen', icon: 'tower_base_3', maxRank: 2,
-        description: 'Rift-Sammler können im Kampf 1 Stufe höher verbessert werden.',
-        costs: costs({ gold: 120, holz: 80 }, 2, 2), requiredLevel: [1, 2],
+        id: 'sammler_stufen', name: 'Große Karawanen', icon: 'tower_base_3', maxRank: 1,
+        description: 'Rift-Sammler können im Kampf bis Stufe 4 verbessert werden (Stufe 5: Forschung »Meisterbaukunst«).',
+        costs: costs({ gold: 120, holz: 80 }, 1), requiredLevel: [2],
         modifiers: [{ stat: 'towerMaxLevel', kind: 'flat', value: 1, towerTags: ['gatherer'] }],
       },
       {
@@ -643,9 +643,9 @@ export const BUILDINGS: readonly BuildingDef[] = [
         modifiers: [{ stat: 'towerLimit', kind: 'flat', value: 1, towerTags: ['mine'] }],
       },
       {
-        id: 'minen_stufen', name: 'Tiefe Schächte', icon: 'tower_base_3', maxRank: 2,
-        description: 'Kristallminen können im Kampf 1 Stufe höher verbessert werden.',
-        costs: costs({ stein: 120, gold: 100 }, 2, 2), requiredLevel: [1, 2],
+        id: 'minen_stufen', name: 'Tiefe Schächte', icon: 'tower_base_3', maxRank: 1,
+        description: 'Kristallminen können im Kampf bis Stufe 4 verbessert werden (Stufe 5: Forschung »Meisterbaukunst«).',
+        costs: costs({ stein: 120, gold: 100 }, 1), requiredLevel: [2],
         modifiers: [{ stat: 'towerMaxLevel', kind: 'flat', value: 1, towerTags: ['mine'] }],
       },
       {

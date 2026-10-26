@@ -33,12 +33,19 @@
 - [x] Größere Karte (28 × 13) ohne sichtbares Raster, längere Wege, Karte mit dem Finger verschieben
 - [x] Forschungsbaum (Universität) und Magiebaum (Magiergilde)
 
+## Erledigt (v0.5)
+
+- [x] Türme ohne Forschung bis Stufe 3 (nur Grundwerte), Stufe 4–5 über Gebäude-Upgrades und Forschung
+- [x] Natürlichere Wege mit runden Kurven
+- [x] Soundeffekte (erzeugt im Browser), Ton an/aus
+- [x] Rift-Animation beim Wechsel Tag ↔ Nacht, Türme kommen aus kleinen Rifts
+
 ## Als Nächstes (Vorschläge)
 
 1. **Selbst spielen und Balancing anpassen** – Zahlen in `src/config.ts` und `src/data/*`.
    Wichtig nach v0.2: Die Schwierigkeit späterer Nächte an Turm-Limits und Stadt-Fortschritt anpassen
    (der Test-Bot verliert Nacht 10 mit mittlerer Stadt in Welle 3). Bauzeiten (jetzt 5 s) festlegen.
-2. **Sound & Musik** (Treffer, Bau, Welle, Sieg/Niederlage)
+2. **Musik** und echte Sound-Dateien (Soundeffekte gibt es schon, erzeugt im Browser)
 3. **Echte Grafik**: Sprites/Pixel-Art statt Code-Grafik (Textur-Schlüssel bleiben gleich, siehe `textures.ts`)
 4. **Animationen**: laufende Gegner, Turm-Schuss-Animation, Tor-Schaden sichtbar
 5. **Nächste Welle früher rufen** (für Bonus-Gold), Wellen-Vorschau mit Gegner-Infos zum Antippen

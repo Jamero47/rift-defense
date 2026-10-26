@@ -202,7 +202,7 @@ export class BattleMenus {
         if (s.upgradeTower(t)) this.openTower(t);
       }, { subLabel: `${cost} Kristalle`, fontSize: 19, enabled: s.crystals >= cost }));
     } else if (next) {
-      root.add(new Button(s, 100, by, 170, 54, 'Gesperrt', () => {}, { enabled: false, fontSize: 19, subLabel: `Upgrade: ${s.towerSource(t.def)}` }));
+      root.add(new Button(s, 100, by, 170, 54, 'Gesperrt', () => {}, { enabled: false, fontSize: 19, subLabel: `Stufe ${t.level + 1}: Upgrade in der Stadt` }));
     } else {
       root.add(new Button(s, 100, by, 170, 54, 'Max. Stufe', () => {}, { enabled: false, fontSize: 19 }));
     }

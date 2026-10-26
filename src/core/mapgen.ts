@@ -4,7 +4,7 @@ import { Rng } from './rng';
 import type { GridPos } from './types';
 
 // Erzeugt jede Nacht eine neue Karte vor dem Tor.
-// Die Wege laufen von rechts (Rift) nach links (Tor) und schlängeln sich auf und ab.
+// Die Wege laufen von rechts (Rift) nach links (Tor) und winden sich wie Straßen durch die Landschaft.
 
 export interface MapData {
   riftId: string;
@@ -37,13 +37,16 @@ export function generateMap(rift: RiftDef, pathCount: number, rng: Rng): MapData
 }
 
 /**
- * Gräbt einen Weg von der rechten Kante bis zum Tor.
+ * Gräbt einen Weg von der rechten Kante bis zum Tor – wie eine natürliche Straße:
+ * meist geradeaus nach links, mit sanften Kurven (1–2 Felder) und ab und zu einer größeren Biegung,
+ * manchmal schräg in kleinen Stufen. Der Weg läuft nie zurück, dadurch liegen keine Wegstücke direkt nebeneinander.
  * Ist `merge` gesetzt, endet der Weg, sobald er auf diesen anderen Weg trifft, und folgt ihm.
  */
 function carvePath(startRow: number, merge: GridPos[] | null, rng: Rng): GridPos[] {
   const cells: GridPos[] = [];
   let col = COLS - 1;
   let row = startRow;
+  let lastDir = 0;
 
   // Gibt den Rest des anderen Wegs zurück, falls wir auf ihn treffen.
   const push = (c: number, r: number): GridPos[] | null => {
@@ -57,8 +60,8 @@ function carvePath(startRow: number, merge: GridPos[] | null, rng: Rng): GridPos
   if (rest) return [...cells, ...rest];
 
   while (col > 0) {
-    // Ein Stück nach links
-    const run = rng.int(2, 3);
+    // Geradeaus nach links; nach einem Richtungswechsel etwas länger, damit keine engen Haarnadeln entstehen
+    const run = rng.int(2, 4) + (rng.chance(0.25) ? 2 : 0);
     for (let i = 0; i < run && col > 0; i++) {
       col--;
       rest = push(col, row);
@@ -66,22 +69,35 @@ function carvePath(startRow: number, merge: GridPos[] | null, rng: Rng): GridPos
     }
     if (col <= 0) break;
 
-    // Dann hoch oder runter. Kurz vor dem Tor geht es zur Torzeile.
+    // Kurve: meist sanft, manchmal eine große Biegung. Kurz vor dem Tor geht es zur Torzeile.
     let target: number;
-    if (col <= 3) {
+    if (col <= 4) {
       target = GATE_ROW;
     } else {
-      const options = range(0, ROWS - 1).filter((r) => Math.abs(r - row) >= 2);
-      target = rng.pick(options);
+      const delta = rng.chance(0.3) ? rng.int(3, 5) : rng.int(1, 2);
+      let dir = rng.chance(0.5) ? 1 : -1;
+      // Nicht zu nah an den Rand; nach einer Kurve lieber in dieselbe Richtung weiter (wirkt wie eine Straße am Hang)
+      if (lastDir !== 0 && rng.chance(0.4)) dir = lastDir;
+      if (row + dir * delta < 1 || row + dir * delta > ROWS - 2) dir = -dir;
+      target = Math.max(1, Math.min(ROWS - 2, row + dir * delta));
     }
+    if (target === row) continue;
+    lastDir = target > row ? 1 : -1;
+    // Schräg (Treppe) nur bei längeren Kurven und mit genug Platz bis zum Tor
+    const diagonal = Math.abs(target - row) >= 2 && col > 6 && rng.chance(0.35);
     while (row !== target) {
       row += row < target ? 1 : -1;
       rest = push(col, row);
       if (rest) return [...cells, ...rest];
+      if (diagonal && row !== target && col > 1) {
+        col--;
+        rest = push(col, row);
+        if (rest) return [...cells, ...rest];
+      }
     }
   }
 
-  // Falls wir in Spalte 0 nicht auf Torhöhe sind (sollte selten passieren): angleichen.
+  // Falls wir in Spalte 0 nicht auf Torhöhe sind: angleichen.
   while (row !== GATE_ROW) {
     row += row < GATE_ROW ? 1 : -1;
     rest = push(col, row);

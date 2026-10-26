@@ -51,6 +51,12 @@ in `screenshots/` ansehen. `smoke` bricht bei JavaScript-Fehlern im Browser ab.
 - Layout: logisch 1280×720, `Scale.FIT`. Kampfkarte 28×13 Felder à 72 px ab (128, 72), größer als der Bildschirm:
   Kamera mit Grenzen, Verschieben per Ziehen. HUD/Dialoge werden mit `pin()` (ui/widgets) festgeheftet (scrollFactor 0);
   Menüs auf der Karte liegen in der Welt. Klicks immer über `toWorld()` umrechnen. Tests: `battle.focusCell(cell)`.
+- Sound: `src/services/sound.ts` (`sfx.play(name)`, Web-Audio-Synthese, Einstellung `settings.sound`).
+  Rift-Übergänge und Turm-Beschwörung: `src/ui/warp.ts` (Barrel-Filter der Kamera, nur WebGL).
+  `Battle`/`City` bekommen `warp` in den Szenendaten, wenn sie hereinwarpen sollen.
+- Turmstufen: 5 Stufen pro Turm, `baseMaxLevel` 3; Stufe 4–5 über `towerMaxLevel` (Gebäude-Upgrade, Forschung).
+- Wege: `core/mapgen` gräbt Felder-Wege; `BattleScene.buildRoutes()` rundet sie zu Straßen (`smoothCorners`),
+  `drawRoads()` zeichnet sie – einfache Wegfelder zeigen darunter Boden.
 - Debug: `?debug` in der URL → `window.rift` (`go(scene, data)`, `battle()`, `save`, `button(label)` = Knopf-Position).
   Wird von `scripts/smoke.mjs` genutzt (`--full-city` für Tests späterer Nächte mit allen Türmen).
 

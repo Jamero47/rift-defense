@@ -29,6 +29,7 @@ export class ResultScene extends Phaser.Scene {
   }
 
   create(data: ResultData): void {
+    this.cameras.main.fadeIn(400, 255, 255, 255);
     const rift = getRift(data.riftId);
     drawBackdrop(this, rift.color);
     this.add.rectangle(GAME_WIDTH / 2, 360, GAME_WIDTH, 720, 0x000000, 0.4);
@@ -69,10 +70,10 @@ export class ResultScene extends Phaser.Scene {
 
     const by = Math.min(675, y + h + 50);
     if (data.victory) {
-      new Button(this, GAME_WIDTH / 2, by, 340, 70, 'Zur Stadt', () => this.scene.start('City'), { fontSize: 28 });
+      new Button(this, GAME_WIDTH / 2, by, 340, 70, 'Zur Stadt', () => this.scene.start('City', { warp: data.riftId }), { fontSize: 28 });
     } else {
-      new Button(this, GAME_WIDTH / 2 - 180, by, 320, 70, 'Zur Stadt', () => this.scene.start('City'), { fontSize: 26, color: COLORS.buttonAlt });
-      new Button(this, GAME_WIDTH / 2 + 180, by, 320, 70, 'Nochmal versuchen', () => this.scene.start('Battle', { night: data.night }), { fontSize: 26 });
+      new Button(this, GAME_WIDTH / 2 - 180, by, 320, 70, 'Zur Stadt', () => this.scene.start('City', { warp: data.riftId }), { fontSize: 26, color: COLORS.buttonAlt });
+      new Button(this, GAME_WIDTH / 2 + 180, by, 320, 70, 'Nochmal versuchen', () => this.scene.start('Battle', { night: data.night, warp: true }), { fontSize: 26 });
     }
   }
 

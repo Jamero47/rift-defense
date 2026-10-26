@@ -60,6 +60,8 @@ export interface SaveData {
     speed: number;
     /** Tutorial im ersten Kampf erledigt */
     tutorialDone: boolean;
+    /** Soundeffekte an */
+    sound: boolean;
   };
 }
 
@@ -76,7 +78,7 @@ export function defaultSave(seed = randomSeed()): SaveData {
     city: emptyCity(),
     cards: [],
     stats: { bestNight: 0, nightsWon: 0, defeats: 0, enemiesKilled: 0 },
-    settings: { speed: 1, tutorialDone: false },
+    settings: { speed: 1, tutorialDone: false, sound: true },
   };
 }
 

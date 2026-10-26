@@ -3,6 +3,8 @@ import { BattleScene } from './battle/BattleScene';
 import { GAME_HEIGHT, GAME_WIDTH } from './config';
 import { loadMods } from './core/mod';
 import { installDebug } from './debug';
+import { saveStore } from './core/save';
+import { sfx } from './services/sound';
 import { BootScene } from './scenes/BootScene';
 import { CityScene } from './scenes/CityScene';
 import { MenuScene } from './scenes/MenuScene';
@@ -30,3 +32,7 @@ const game = new Phaser.Game({
 });
 
 installDebug(game);
+
+// Ton: Browser erlauben ihn erst nach dem ersten Antippen
+sfx.setEnabled(saveStore.get().settings.sound);
+window.addEventListener('pointerdown', () => sfx.unlock());

@@ -89,7 +89,7 @@ export function generateAllTextures(scene: Phaser.Scene): void {
     make(scene, `portal_${rift.id}`, 96, 128, (ctx) => drawPortal(ctx, rift.color));
   }
   make(scene, 'portal_swirl', 96, 128, drawSwirl);
-  for (let lvl = 1; lvl <= 3; lvl++) make(scene, `tower_base_${lvl}`, 64, 64, (ctx) => drawTowerBase(ctx, lvl));
+  for (let lvl = 1; lvl <= 5; lvl++) make(scene, `tower_base_${lvl}`, 64, 64, (ctx) => drawTowerBase(ctx, lvl));
   for (const t of TOWERS) make(scene, `top_${t.id}`, 64, 64, (ctx) => drawTowerTop(ctx, t.id, t.color));
   for (const e of ENEMIES) {
     const size = Math.ceil(e.radius * 3);
@@ -382,11 +382,18 @@ function drawTowerBase(ctx: Ctx, level: number): void {
     ctx.lineTo(56, y);
     ctx.stroke();
   }
-  const trim = level === 1 ? '#3f434b' : level === 2 ? '#d7dde8' : '#f5c542';
+  const trim = ['#3f434b', '#d7dde8', '#f5c542', '#c084fc', '#22d3ee'][level - 1] ?? '#f5c542';
   ctx.strokeStyle = trim;
   ctx.lineWidth = level === 1 ? 3 : 4;
   roundRect(ctx, 6, 6, 52, 52, 12);
   ctx.stroke();
+  // Stufe 4–5 (mit Forschung): leuchtende Rift-Edelsteine in den Ecken
+  if (level >= 4) {
+    for (const [x, y] of level === 4 ? [[12, 12], [52, 52]] : [[12, 12], [52, 12], [12, 52], [52, 52]]) {
+      glow(ctx, x, y, 9, level === 4 ? 0xc084fc : 0x22d3ee, 0.8);
+      circle(ctx, x, y, 3.5, trim);
+    }
+  }
 }
 
 function drawTowerTop(ctx: Ctx, id: string, color: number): void {

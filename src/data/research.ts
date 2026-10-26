@@ -105,6 +105,12 @@ export const RESEARCH: readonly ResearchDef[] = [
     cost: { gold: 150, magie: 40 }, requiredLevel: 2, unlocksBuilding: 'orakel',
   },
   {
+    id: 'meisterbaukunst', name: 'Meisterbaukunst', icon: 'tower_base_5', tree: 'uni', col: 3, row: 3, requires: ['ballistik'],
+    description: 'Alle Türme können im Kampf 1 Stufe höher verbessert werden (zusammen mit den Gebäude-Upgrades bis Stufe 5).',
+    cost: { gold: 250, stein: 200, magie: 40 }, requiredLevel: 2,
+    modifiers: [{ stat: 'towerMaxLevel', kind: 'flat', value: 1 }],
+  },
+  {
     id: 'wehrtuerme', name: 'Wehrtürme', icon: 'icon_wall', tree: 'uni', col: 0, row: 4, requires: [],
     description: 'Schaltet den Wachturm für die Mauerplätze frei.',
     cost: { holz: 60, stein: 100 }, requiredLevel: 1, unlocksBuilding: 'wachturm',
@@ -160,11 +166,10 @@ export const RESEARCH: readonly ResearchDef[] = [
   },
   {
     id: 'erzmagier', name: 'Erzmagier', icon: 'top_mage', tree: 'magic', col: 3, row: 2, requires: ['mana_echo'],
-    description: 'Magie-Türme: +15 % magischer Schaden und 1 Stufe höher verbesserbar.',
+    description: 'Magie-Türme: +25 % magischer Schaden.',
     cost: { gold: 350, magie: 200 }, requiredLevel: 3,
     modifiers: [
-      { stat: 'magicDamage', kind: 'pct', value: 0.15, towerTags: ['magic'] },
-      { stat: 'towerMaxLevel', kind: 'flat', value: 1, towerTags: ['magic'] },
+      { stat: 'magicDamage', kind: 'pct', value: 0.25, towerTags: ['magic'] },
     ],
   },
   {

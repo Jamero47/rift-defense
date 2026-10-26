@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { saveStore } from '../core/save';
+import { sfx } from '../services/sound';
 import { FONT, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { css, shade } from '../game/textures';
 
@@ -136,7 +138,10 @@ export class Button extends Phaser.GameObjects.Container {
     this.zone.on('pointerup', () => {
       const fire = this.pressed && this.enabled;
       this.release();
-      if (fire) onClick();
+      if (fire) {
+        sfx.play('click');
+        onClick();
+      }
     });
     this.zone.on('pointerout', () => this.release());
 
@@ -271,3 +276,16 @@ export function floatText(scene: Phaser.Scene, x: number, y: number, value: stri
 }
 
 export { css };
+
+/** Knopf „Ton: An/Aus“ – speichert die Einstellung im Spielstand. */
+export function soundToggle(scene: Phaser.Scene, x: number, y: number, w: number, h: number, short = false): Button {
+  const label = () => (short ? (sfx.isEnabled() ? 'Ton' : 'Stumm') : `Ton: ${sfx.isEnabled() ? 'An' : 'Aus'}`);
+  const btn: Button = new Button(scene, x, y, w, h, label(), () => {
+    const on = !sfx.isEnabled();
+    sfx.setEnabled(on);
+    saveStore.update((d) => (d.settings.sound = on));
+    btn.setLabel(label());
+    if (on) sfx.play('click');
+  }, { color: COLORS.buttonAlt, fontSize: short ? 16 : 20 });
+  return btn;
+}
